@@ -54,7 +54,7 @@ public class EMRProperties {
     @Value("${slave_type:m6g.xlarge}")
     private String slaveType;
 
-    @Value("${service_role:emr_datapull_role}")
+    @Value("${service_role:EMR_DefaultRole}")
     private String serviceRole;
 
     @Value("${job_flow_role:emr_ec2_datapull_role}")

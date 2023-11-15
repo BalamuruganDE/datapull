@@ -442,6 +442,11 @@ public class DataPullTask implements Runnable {
         if (count> 1) {
             jobConfig.withInstanceFleets(workerInstanceFleetConfig);
         }
+
+        if (!clusterProperties.getEc2KeyName().isEmpty()){
+            jobConfig.withEc2KeyName(clusterProperties.getEc2KeyName());
+        }
+
         return jobConfig;
     }
 

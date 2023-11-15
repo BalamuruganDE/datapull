@@ -1,12 +1,12 @@
 datapull:
   application:
-    region:
+    region: us-east-1
   secretstore:
     vault:
-      vault_url:
-      static_secret_path_prefix:
-      vault_nonce:
-      vault_path_login:
+      vault_url: https://vault-us-east-1.test.aws.away.black:8200
+      static_secret_path_prefix: /v1/dbops/staticsecrets/awsenvironments/test/awsregions/us-east-1/clusters
+      vault_nonce: f2d47637-4b41-fdad-f556-b657ff2c0edb
+      vault_path_login: /v1/auth/aws-ec2/login
   json:
     inputjson: Input_Sample_filesystem-to-filesystem.json
   spark:
@@ -23,19 +23,35 @@ datapull:
     no_of_retries: 16
     timeout: 10000
     consul_url:
+    consul_datacenters:
+      us-aus-1-prod: http://us-aus-1-prod.consul.prod.vxe.away.black:8500
+      us-aus-1-dts: http://us-aus-1-dts.consul.dts.vxe.away.black:8500
+      us-aus-1-itdev: http://us-aus-1-itdev.consul.dts.vxe.away.black:8500
+      us-east-1-vpc-d9087bbe: http://us-east-1-vpc-d9087bbe.consul.prod.aws.away.black:8500
+      us-east-1-vpc-58fd953f: http://us-east-1-vpc-58fd953f.consul.dev.aws.away.black:8500
+      us-east-1-vpc-35196a52: http://us-east-1-vpc-35196a52.consul.stage.aws.away.black:8500
+      us-east-1-vpc-88394aef: http://us-east-1-vpc-88394aef.consul.test.aws.away.black:8500
+      us-east-1-vpc-56a09231: http://us-east-1-vpc-56a09231.consul.mgmt.aws.away.black:8500
+      eu-west-1-vpc-60ad1304: http://eu-west-1-vpc-60ad1304.consul.prod.aws.away.black:8500
+      eu-west-1-vpc-942093f0: http://eu-west-1-vpc-942093f0.consul.dev.aws.away.black:8500
+      eu-west-1-vpc-ddc17fb9: http://eu-west-1-vpc-ddc17fb9.consul.test.aws.away.black:8500
+      eu-west-1-vpc-41bc0225: http://eu-west-1-vpc-41bc0225.consul.stage.aws.away.black:8500
+      us-east-1-vpc-0618333437f727d62: http://us-east-1-vpc-0618333437f727d62.consul.egdp-test.aws.away.black:8500
+      us-east-1-vpc-0087f4c1ce9648e0e: http://us-east-1-vpc-0087f4c1ce9648e0e.consul.egdp-stage.aws.away.black:8500
+      us-east-1-vpc-018bd5207b3335f70: http://us-east-1-vpc-018bd5207b3335f70.consul.egdp-prod.aws.away.black:8500
     sleeptimeout: 60000
   api:
-    s3_bucket_name:
-    application_subnet_1:
-    application_subnet_2:
-    application_subnet_3:
-    application_security_group:
-    vpc_id:
-    load_balancer_certificate_arn:
+    s3_bucket_name: ha-test-data-datatools-us-east-1
+    application_subnet_1: subnet-1430cb5d
+    application_subnet_2: subnet-5de2f160
+    application_subnet_3: subnet-96fdf5ce
+    application_security_group: sg-3613d94c
+    vpc_id: vpc-88394aef
+    load_balancer_certificate_arn: arn:aws:acm:us-east-1:588074183790:certificate/03682918-5b58-48a6-aa34-ecf76a2d57c5
   emr:
-    emr_security_group_master:
-    emr_security_group_slave:
-    emr_security_group_service_access:
+    emr_security_group_master: sg-dd2333a1
+    emr_security_group_slave: sg-e323339f
+    emr_security_group_service_access: sg-e123339d
     hive_properties:
       hive.metastore.uris:
       hive.security.authorization.createtable.role.grants:
@@ -74,8 +90,8 @@ datapull:
       driver: com.microsoft.sqlserver.jdbc.SQLServerDriver
   email:
     smtp:
-      emailaddress:
-      smtpserveraddress:
+      emailaddress: HA_DataTools@expediacorp.onmicrosoft.com
+      smtpserveraddress: smtptls.sea.corp.expecn.com
     ses:
       region:
       email:

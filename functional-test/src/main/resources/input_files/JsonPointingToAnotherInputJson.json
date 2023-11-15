@@ -1,5 +1,0 @@
-{
-  "jsoninputfile": {
-    "s3path": "S3_BUCKET/datapull-opensource/source/final-input-json.json"
-  }
-}

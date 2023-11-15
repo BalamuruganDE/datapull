@@ -12,7 +12,7 @@ exitAfterFailure(){
 echo "Replace config params"
 export docker_image_name="datatools-datapull-api"
 env=$1
-export AWS_PROFILE="datapull_user"
+export AWS_PROFILE="vrbotest"
 
 cd ../../../
 
@@ -140,7 +140,7 @@ export AWS_DEFAULT_REGION=${aws_repo_region}
 
 echo "server port ========================${server_port}"
 
-jar_file_path="s3://${bucket_name}/datapull-opensource/jars/DataMigrationFramework-1.0-SNAPSHOT-jar-with-dependencies.jar"
+jar_file_path="s3://${bucket_name}/datapull-opensource/jars/ec2key/DataMigrationFramework-1.0-SNAPSHOT-jar-with-dependencies.jar"
 
 echo "jar_file_path $jar_file_path ================="
 
@@ -168,6 +168,8 @@ echo "Uploading core Jar to s3"
 docker run --rm -v "$(pwd)":/data -v "${HOME}/.aws":"/root/.aws" amazon/aws-cli --profile ${AWS_PROFILE} s3 cp /data/target/DataMigrationFramework-1.0-SNAPSHOT-jar-with-dependencies.jar "$jar_file_path"
 
 exitAfterFailure
+
+#exit 0
 
 cd ../api/
 
