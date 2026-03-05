@@ -22,9 +22,11 @@ import java.util.concurrent.Executors
 
 import com.amazonaws.services.simpleemail.model.{Body, Content, Destination}
 import config.AppConfig
-import javax.mail._
 import helper._
+
+import javax.mail._
 import javax.mail.internet.{InternetAddress, MimeMessage}
+
 import logging._
 import org.codehaus.jettison.json.JSONArray
 import security._

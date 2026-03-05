@@ -21,10 +21,11 @@ import java.nio.ByteBuffer
 import java.time._
 import java.util.{Scanner, UUID}
 
-import com.datastax.driver.core.utils.UUIDs
+import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
-import com.mongodb.spark.sql.fieldTypes.Binary
+import org.bson.types.Binary
+import org.apache.spark.sql.types._
 import config.AppConfig
 import helper._
 import javax.net.ssl._
@@ -40,7 +41,7 @@ import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks.breakable
 
 // Main class
-object DataPull {
+object DataPull extends Serializable {
 
   def main(args: Array[String]): Unit = {
 
@@ -123,9 +124,9 @@ object DataPull {
         .config("" + config.executor, config.interval)
         .config("" + config.failures, no_of_retries)
         .config("fs." + s3Prefix + ".multiobjectdelete.enable", true)
-        .config("spark.sql.hive.metastore.version", "1.2.1")
+        //.config("spark.sql.hive.metastore.version", "1.2.1")
         .config("spark.sql.hive.metastore.jars", "builtin")
-        .config("spark.sql.hive.caseSensitiveInferenceMode", "INFER_ONLY")
+        .config("spark.sql.hive.caseSensitiveInferenceMode", "NEVER_INFER")
         .enableHiveSupport()
         .getOrCreate()
 
@@ -136,7 +137,7 @@ object DataPull {
     applicationId = sparkSession.sparkContext.applicationId
 
     sparkSession.udf.register("validateUUID", validateUUID _)
-    sparkSession.udf.register("uuidToBinary", uuidToBinary _)
+    //sparkSession.udf.register("uuidToBinary", uuidToBinary _)
     sparkSession.udf.register("binaryToUUID", binaryToUUID _)
     sparkSession.udf.register("uuid", uuid _)
     sparkSession.udf.register("binaryToJUUID", binaryToJUUID _)
@@ -356,7 +357,7 @@ object DataPull {
 
   def uuid(): String = {
 
-    UUIDs.timeBased().toString
+    Uuids.timeBased().toString
 
   }
 
@@ -375,6 +376,7 @@ object DataPull {
     }
   }
 
+  /*
   def uuidToBinary(uuid_key: String): Binary = {
     if (uuid_key == null) null
 
@@ -390,6 +392,11 @@ object DataPull {
       val binaryUuid = new Binary(bsonBinary.getType(), bsonBinary.getData())
       return binaryUuid
     }
+  }
+  */
+
+  def uuidToBinary(uuid: UUID): Binary = {
+    new Binary(uuid.toString.getBytes)
   }
 
   def binaryToUUID(byte: Array[Byte]): String = {

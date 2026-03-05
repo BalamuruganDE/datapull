@@ -73,9 +73,19 @@ class Helper(appConfig: AppConfig) {
   }
 
   def GetEC2pkcs7(): String = {
-    var pkcs7 = getHttpResponse("http://169.254.169.254/latest/dynamic/instance-identity/pkcs7", 100000, 10000, "GET").ResponseBody
+    var pkcs7Properties = Map[String, String]()
+    pkcs7Properties += ("X-aws-ec2-metadata-token" -> imdsv2Token())
+    var pkcs7 = getHttpResponse("http://169.254.169.254/latest/dynamic/instance-identity/pkcs7", 100000, 10000, "GET", httpHeaders = pkcs7Properties).ResponseBody
     pkcs7 = pkcs7.split('\n').mkString
     pkcs7
+  }
+
+  def imdsv2Token(): String = {
+    var tokenProperties = Map[String, String]()
+    tokenProperties += ("X-aws-ec2-metadata-token-ttl-seconds" -> "21600")
+
+    var token = getHttpResponse(url = "http://169.254.169.254/latest/api/token", 100000, 10000, "PUT", httpHeaders = tokenProperties).ResponseBody
+    token
   }
 
   /**
@@ -177,7 +187,9 @@ class Helper(appConfig: AppConfig) {
   }
 
   def GetEC2Role(): String = {
-    var role = getHttpResponse("http://169.254.169.254/latest/meta-data/iam/security-credentials/", 100000, 10000, "GET").ResponseBody
+    var ec2RoleProperties = Map[String, String]()
+    ec2RoleProperties += ("X-aws-ec2-metadata-token" -> imdsv2Token())
+    var role = getHttpResponse("http://169.254.169.254/latest/meta-data/iam/security-credentials/", 100000, 10000, "GET", httpHeaders = ec2RoleProperties).ResponseBody
     role
   }
 
@@ -284,7 +296,8 @@ class Helper(appConfig: AppConfig) {
       }
       else {
         driver = "com.microsoft.sqlserver.jdbc.SQLServerDriver"
-        url = "jdbc:sqlserver://" + server + ":" + (if (port == null) "1433" else port) + ";database=" + database
+        url = "jdbc:sqlserver://" + server + ":" + (if (port == null) "1433" else port) + ";database=" + database +
+          ";encrypt=" + sslEnabled + ";trustServerCertificate=true"
       }
     }
     else if (platform == "oracle") {
@@ -304,7 +317,7 @@ class Helper(appConfig: AppConfig) {
       driver = "org.postgresql.Driver"
       url = "jdbc:postgresql://" + server + ":" + (if (port == null) "5432" else port) + "/" + database + (if (sslEnabled == true) "?sslmode=require" else "")
     }
-    println("logging the URI: " + url)
+    //println("logging the URI: " + url)
     Map("driver" -> driver, "url" -> url)
   }
 

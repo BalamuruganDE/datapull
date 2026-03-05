@@ -69,9 +69,9 @@ class Migration extends SparkListener {
         .config("spark.sql.broadcastTimeout", 36000)
         .config("spark.task.maxFailures", no_of_retries)
         .config("fs.s3a.multiobjectdelete.enable", true)
-        .config("spark.sql.hive.metastore.version", "1.2.1")
+        //.config("spark.sql.hive.metastore.version", "1.2.1")
         .config("spark.sql.hive.metastore.jars", "builtin")
-        .config("spark.sql.hive.caseSensitiveInferenceMode", "INFER_ONLY")
+        .config("spark.sql.hive.caseSensitiveInferenceMode", "NEVER_INFER")
         .enableHiveSupport()
         .getOrCreate()
     }
@@ -385,6 +385,10 @@ class Migration extends SparkListener {
           dft,
           sparkSession
         )
+      } else if (destinationMap("platform") == "iceberg") {
+        dataframeFromTo.dataFrameToIceberg(sparkSession, dft, destinationMap("table"), destinationMap("database"), destinationMap.getOrElse("savemode","append"),
+          destinationMap.getOrElse("ismergeinto","false").toBoolean, destinationMap.getOrElse("mergeintosql"," ")
+          ,destinationMap.getOrElse("sparkoptions",""))
       }
 
       if (dft.isStreaming) {
@@ -510,6 +514,7 @@ class Migration extends SparkListener {
 
     val platform = propertiesMap("platform")
     val dataframeFromTo = new DataFrameFromTo(appConfig, pipeline)
+
 
     if (platform == "mssql" || platform == "mysql" || platform == "oracle" || platform == "postgres" || platform == "teradata") {
 
@@ -684,6 +689,8 @@ class Migration extends SparkListener {
         propertiesMap("vaultenv"),
         propertiesMap.getOrElse("secretstore", secretStoreDefaultValue),
         sparkSession)
+    } else if (platform == "iceberg") {
+      dataframeFromTo.icebergToDataFrame(sparkSession, propertiesMap("query"))
     }
     else {
       sparkSession.emptyDataFrame
@@ -894,6 +901,8 @@ class Migration extends SparkListener {
         propertiesMap = propertiesMap ++ jsonObjectPropertiesToMap(List("cluster", "database", "authenticationdatabase", "collection", "login", "password"), platformObject)
       } else if (platform == "kafka") {
         propertiesMap = propertiesMap ++ jsonObjectPropertiesToMap(List("bootstrapServers", "schemaRegistries", "topic", "keyField", "keyFormat"), platformObject)
+      } else if (platform == "iceberg") {
+        propertiesMap = propertiesMap ++ jsonObjectPropertiesToMap(List("cluster", "clustertype", "database", "table"), platformObject)
       }
       htmlString.append("<dl>")
       propertiesMap.filter((t) => t._2 != "" && t._1 != "login" && t._1 != "password" && t._1 != "awsaccesskeyid" && t._1 != "awssecretaccesskey").foreach(i => htmlString.append("<dt>" + i._1 + "</dt><dd>" + i._2 + "</dd>"))

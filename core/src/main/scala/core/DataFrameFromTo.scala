@@ -30,11 +30,10 @@ import com.amazonaws.services.s3.{AmazonS3, AmazonS3ClientBuilder}
 import com.datastax.spark.connector.cql.CassandraConnector
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
-import com.mongodb.client.{MongoCollection, MongoCursor, MongoDatabase}
-import com.mongodb.spark.MongoSpark
-import com.mongodb.spark.config.{ReadConfig, WriteConfig}
-import com.mongodb.spark.sql.toSparkSessionFunctions
-import com.mongodb.{MongoClient, MongoClientURI}
+import org.apache.spark.sql.functions.{col, monotonically_increasing_id}
+import org.apache.spark.sql.types.IntegerType
+
+import scala.collection.mutable
 import config.AppConfig
 import core.DataPull.jsonObjectPropertiesToMap
 import helper._
@@ -270,7 +269,8 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
       df.write.
         format("com.springml.spark.sftp").
         options(sparkOptions).
-        save(filePath)
+        option("path", filePath).
+        save()
 
     } else if (rowFromJsonString) {
 
@@ -320,23 +320,9 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
         if (groupByFields != "") {
           dfWriter = dfWriter.partitionBy(groupByFieldsArray: _*)
         }
-        if (fileFormat == "json") {
-          dfWriter.json(s"$filePrefixString$filePath")
-        } else if (fileFormat == "csv") {
-          dfWriter.csv(s"$filePrefixString$filePath")
-        } else if (fileFormat == "avro") {
-          dfWriter.save(s"$filePrefixString$filePath")
-        } else if (fileFormat == "orc") {
-          dfWriter.orc(s"$filePrefixString$filePath")
-        } else if (fileFormat == "sequencefile") {
-          dft.toJSON.rdd.zipWithIndex.map { case (v, i) => (i, v) }.saveAsSequenceFile(s"$filePrefixString$filePath", Some(classOf[org.apache.hadoop.io.compress.DefaultCodec]))
-        } else if (fileFormat == "sequencefilesnappy") {
-          dft.toJSON.rdd.zipWithIndex.map { case (v, i) => (i, v) }.saveAsSequenceFile(s"$filePrefixString$filePath", Some(classOf[org.apache.hadoop.io.compress.SnappyCodec]))
-        } else if (fileFormat == "sequencefiledeflate") {
-          dft.toJSON.rdd.zipWithIndex.map { case (v, i) => (i, v) }.saveAsSequenceFile(s"$filePrefixString$filePath", Some(classOf[org.apache.hadoop.io.compress.DeflateCodec]))
-        } else {
-          //parquet
-          dfWriter.parquet(s"$filePrefixString$filePath")
+        if (fileFormat == "json" | fileFormat == "csv" | fileFormat == "avro"| fileFormat == "orc"
+          | fileFormat == "parquet") {
+          dfWriter.format(fileFormat).option("path",s"$filePrefixString$filePath").save()
         }
       }
     }
@@ -796,45 +782,51 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
     }
     uri = helper.buildMongoURI(vaultLogin, vaultPassword, cluster, null, authenticationDatabase, database, collection, authenticationEnabled.toBoolean, sslEnabled)
     if (overrideconnector.toBoolean) {
-      var mongoClient: MongoClient = new MongoClient(new MongoClientURI(uri))
-      var mdatabase: MongoDatabase = mongoClient.getDatabase("" + database);
-      var col: MongoCollection[Document] = mdatabase.getCollection(collection);
-      var cur: MongoCursor[Document] = col.find().iterator()
-      var doc: org.bson.Document = null
-      val list = new ListBuffer[String]()
-      val tmp_location = tmpFileLocation
-      var df_temp = sparkSession.emptyDataFrame
-      var df_big = sparkSession.emptyDataFrame
-      var part = 1
-      var tmp_location_local = tmp_location + "/partition=" + part + "/"
+      // MongoDB Read using MongoDB Spark Connector
+      val readConfig = Map(
+          "spark.mongodb.read.connection.uri" -> uri,
+          "database" -> database,
+          "collection" -> collection
+      )
+      val dfMongo = sparkSession.read.format("mongodb").options(readConfig).load()
 
-      import sparkSession.implicits._
-      while (cur.hasNext()) {
-        doc = cur.next();
-        list += (doc.toJson)
-        if (list.length >= 20000) {
-          df_temp = list.toList.toDF("jsonfield")
-          df_temp.write.mode(SaveMode.Append).json(tmp_location_local)
-          list.clear()
-          part += 1
-          tmp_location_local = tmp_location + "/partition=" + part + "/"
-        }
-      }
-      df_temp = list.toList.toDF("jsonfield")
-      df_temp.write.mode(SaveMode.Append).json(tmp_location_local)
-      list.clear()
-      df_big = sparkSession.read.json(tmp_location).withColumnRenamed("value", "jsonfield")
-      return df_big
-    }
-    else {
-      var sparkOptions = Map("uri" -> uri)
+      // Writing to temporary JSON files with partitioning
+      val tmpLocation = "s3a://" + tmpFileLocation
+      val partitionedDF = dfMongo.withColumn("partition", (monotonically_increasing_id() / 1).cast(IntegerType))
+        .repartition(col("partition"))
+        .withColumnRenamed("_id", "jsonfield")
+
+      partitionedDF.write
+        .mode(SaveMode.Overwrite)
+        .partitionBy("partition")
+        .json(tmpLocation)
+
+      // Reading back the data and renaming fields
+      val dfBig = sparkSession.read
+        .json(tmpLocation)
+        .withColumnRenamed("value", "jsonfield")
+
+      dfBig
+
+    } else {
+      // Additional Spark MongoDB options
+      var sparkOptions = Map(
+        "spark.mongodb.read.connection.uri" -> uri,
+        "database" -> database,
+        "collection" -> collection
+      )
       if (addlSparkOptions != null) {
         sparkOptions = sparkOptions ++ jsonObjectPropertiesToMap(addlSparkOptions)
       }
       if (sampleSize != null) {
-        sparkOptions = sparkOptions ++ Map("spark.mongodb.input.sample.sampleSize" -> sampleSize, "sampleSize" -> sampleSize)
+        sparkOptions = sparkOptions ++ Map(
+          "sampleSize" -> sampleSize,
+          "spark.mongodb.input.sample.sampleSize" -> sampleSize
+        )
       }
-      val df = sparkSession.loadFromMongoDB(ReadConfig(sparkOptions))
+
+      // Load data directly from MongoDB
+      val df = sparkSession.read.format("mongodb").options(sparkOptions).load()
       return df
     }
   }
@@ -863,7 +855,7 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
     }
     uri = helper.buildMongoURI(vaultLogin, vaultPassword, cluster, replicaset, authenticationDatabase, database, collection, authenticationEnabled, sslEnabled)
 
-    var sparkOptions = Map("uri" -> uri, "replaceDocument" -> replaceDocuments.toString, "ordered" -> ordered.toString)
+    var sparkOptions = Map("spark.mongodb.write.connection.uri" -> uri, "replaceDocument" -> replaceDocuments.toString, "ordered" -> ordered.toString)
     if (maxBatchSize != null)
       sparkOptions = sparkOptions ++ Map("maxBatchSize" -> maxBatchSize)
 
@@ -871,18 +863,36 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
       sparkOptions = sparkOptions ++ jsonObjectPropertiesToMap(addlSparkOptions)
     }
 
-    val writeConfig = WriteConfig(sparkOptions)
+    val writeConfig = sparkOptions
+
     if (documentfromjsonfield.toBoolean) {
-
-      import com.mongodb.spark._
+      import org.apache.spark.sql.{Encoder, Encoders}
+      import org.apache.spark.rdd.RDD
       import org.bson.Document
-      import sparkSession.implicits._
-      val rdd = df.select(jsonfield).map(r => r.getString(0)).rdd
-      rdd.map(Document.parse).saveToMongoDB(writeConfig)
-    }
-    else {
-      MongoSpark.save(df, writeConfig)
 
+      // Define an implicit encoder for BSON Document
+      implicit val documentEncoder: Encoder[Document] = Encoders.kryo[Document]
+
+      // Convert DataFrame rows to BSON Documents using RDD
+      val bsonRDD: RDD[Document] = df.select(jsonfield).rdd.map(row => Document.parse(row.getString(0)))
+
+      // Convert RDD[Document] to Dataset[Document] using the custom encoder
+      val bsonDS = sparkSession.createDataset(bsonRDD)
+
+      // Write the BSON Dataset to MongoDB
+      bsonDS.write
+        .format("mongodb")
+        .options(writeConfig)
+        .mode("append")
+        .save()
+
+    } else {
+      // Save the DataFrame directly to MongoDB
+      df.write
+        .format("mongodb")
+        .options(writeConfig)
+        .mode("append")
+        .save()
     }
   }
 
@@ -911,8 +921,11 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
     }
 
 
-    val uri = new MongoClientURI(helper.buildMongoURI(vaultLogin, vaultPassword, cluster, null, authenticationDatabase, database, collection, authenticationEnabled, sslEnabled))
-    val mongoClient = new MongoClient(uri)
+    import com.mongodb.client.{MongoClient, MongoClients, MongoDatabase}
+    import org.bson.Document
+
+    val uri = helper.buildMongoURI(vaultLogin, vaultPassword, cluster, null, authenticationDatabase, database, collection, authenticationEnabled, sslEnabled)
+    val mongoClient: MongoClient = MongoClients.create(uri)
     val data = mongoClient.getDatabase(database)
 
     val response = data.runCommand(org.bson.Document.parse(runCommand))
@@ -1218,8 +1231,8 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
     println("Properties Passed:" + properties)
 
     val defaultConfigs = Map(
-      "spark.sql.hive.caseSensitiveInferenceMode" -> "INFER_ONLY",
-      "spark.sql.hive.metastore.version" -> "1.2.1",
+      "spark.sql.hive.caseSensitiveInferenceMode" -> "NEVER_INFER",
+      //"spark.sql.hive.metastore.version" -> "1.2.1",
       "spark.sql.hive.metastore.jars" -> "builtin"
     )
     val parsedProperties = properties.map { jsonObj =>
@@ -1455,5 +1468,81 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
       .save()
 
   }
+
+  import scala.jdk.CollectionConverters._
+
+  def jsonObjectToMap(jsonObject: JSONObject): Map[String, String] = {
+    jsonObject.keys.asScala.map(key => key.toString -> jsonObject.getString(key.toString)).toMap
+  }
+
+  def dataFrameToIceberg(sparkSession: SparkSession, df: org.apache.spark.sql.DataFrame,
+                         table: String, database: String, saveMode: String, isMergeInto:Boolean,
+                         mergeIntoSQL:String, sparkoptions:String ): Unit = {
+
+    sparkSession.sql("use " + database)
+
+    if (isMergeInto) {
+      //validating MergeIntoQuery
+      if (mergeIntoSQL.trim.toLowerCase.startsWith("merge into")) {
+        //get the source table from User given SQL string
+        val srcTable = mergeIntoSQL.split(" ").take(6).last
+
+        df.createOrReplaceTempView(srcTable)
+        sparkSession.sql(mergeIntoSQL)
+      }else {
+        println("Validation Error: mergeinto sql query is not valid, should be in below format")
+        print("MERGE INTO <target-table> target USING <source-table> source ON target.<key> = source.<key> WHEN MATCHED THEN UPDATE SET * WHEN NOT MATCHED THEN INSERT *")
+        System.exit(1)
+      }
+    } else{
+      var extraConfigOptions = stringToMap(sparkoptions)
+
+      if (extraConfigOptions.isEmpty){
+        extraConfigOptions = extraConfigOptions ++ Map("overwrite-mode" -> "dynamic")
+      } else if (extraConfigOptions.get("overwrite-mode").isEmpty){
+        extraConfigOptions = extraConfigOptions ++ Map("overwrite-mode" -> "dynamic")
+      }
+
+      if (saveMode.toLowerCase == "overwrite") {
+        df.write
+          .format("iceberg")
+          .options(extraConfigOptions)
+          .mode(saveMode)
+          .insertInto(table)
+      } else {
+        df.write
+          .format("iceberg")
+          .mode(saveMode)
+          .insertInto(table)
+      }
+    }
+  }
+
+  import scala.collection.mutable.{Map => MutableMap}
+
+  def stringToMap(input: String): MutableMap[String, String] = {
+    val resultMap = MutableMap[String, String]()
+
+    if (input == null || input.trim.isEmpty) {
+      return resultMap
+    }
+
+    val pairs = input.split(",").map(_.trim)
+
+    for (pair <- pairs) {
+      val keyValue = pair.split(":").map(_.trim)
+      if (keyValue.length == 2) {
+        resultMap(keyValue(0)) = keyValue(1)
+      }
+    }
+
+    resultMap
+  }
+
+  def icebergToDataFrame(sparkSession: org.apache.spark.sql.SparkSession,
+                         query: String): org.apache.spark.sql.DataFrame = {
+    sparkSession.sql(query)
+  }
+
 }
 

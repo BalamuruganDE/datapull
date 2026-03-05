@@ -6,6 +6,62 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html)
 
 
+## [0.1.91] - 2026-03-05
+Upgrade DataPull core to Spark 3.5.0, Scala 2.12, Java 11
+
+Dependency upgrades (pom.xml):
+- Spark 2.4.6 -> 3.5.0, Scala 2.11 -> 2.12, Hadoop 2.10.1 -> 3.2.1
+- MongoDB Spark Connector 10.4.0 (new format API)
+- Cassandra Spark Connector 3.5.0 (driver 4.x)
+- Iceberg 1.5.0 (new platform support)
+- Elasticsearch 7.17.0 with REST clients
+- mssql-jdbc 11.2.3.jre11, ojdbc8 21.9.0.0, terajdbc4 17.20.00.12
+- ABRis 6.4.0, Snowflake 2.10.0, PostgreSQL 42.6.0
+- Guava shade plugin for Spark 3.5 classloader compatibility
+- Log4j 2.17.1 (CVE-2021-44228 fix retained)
+- Added expediahotelloader with Spark/Scala exclusions
+
+MongoDB modernization (DataFrameFromTo.scala):
+- Replaced MongoSpark/ReadConfig/WriteConfig with format("mongodb") API
+- Replaced MongoClient/MongoClientURI with MongoClients.create()
+- Updated mongodbToDataFrame, dataFrameToMongodb, mongoRunCommand
+
+New Iceberg support (DataFrameFromTo.scala, Migration.scala):
+- Added dataFrameToIceberg with MERGE INTO SQL support
+- Added icebergToDataFrame for SQL-based reads
+- Added iceberg as source/destination platform in Migration
+
+Spark 3.5 compatibility (DataPull.scala):
+- Cassandra UUIDs -> Uuids (driver 4.x)
+- Binary type from org.bson.types.Binary
+- DataPull object extends Serializable
+- Hive caseSensitiveInferenceMode: INFER_ONLY -> NEVER_INFER
+- Hive metastore.version config commented out
+
+IMDSv2 and MSSQL fixes (Helper.scala):
+- Added imdsv2Token() for EC2 metadata token-based access
+- Updated GetEC2pkcs7() and GetEC2Role() with IMDSv2 headers
+- MSSQL JDBC URL: added encrypt and trustServerCertificate params
+- Commented out URI logging to prevent credential exposure
+
+All homeaway bug fixes preserved (v0.1.83-0.1.90):
+- ConcurrentHashMap for thread-safe stepPipelineMap
+- Subnet NULL/invalid validation with default pool fallback
+- Credentials display fix, duplicate tags fix
+- Default 'datapullemr' application tag
+- url parameter in RDBMS methods, KMS encryption support
+- setExternalSparkConf, ReplaceInlineExpressions
+- 
+### Changed
+core/pom.xml
+core/src/main/scala/core/DataFrameFromTo.scala
+core/src/main/scala/core/DataPull.scala
+core/src/main/scala/core/Migration.scala
+core/src/main/scala/core/Controller.scala
+core/src/main/scala/helper/Helper.scala
+core/src/main/resources/Samples/Input_Json_Specification.json
+
+
 ## [0.1.90] - 2026-02-16
 Addressing "key not found: url" Exception
 ### Changed
