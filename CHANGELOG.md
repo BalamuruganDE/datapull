@@ -51,7 +51,7 @@ All homeaway bug fixes preserved (v0.1.83-0.1.90):
 - Default 'datapullemr' application tag
 - url parameter in RDBMS methods, KMS encryption support
 - setExternalSparkConf, ReplaceInlineExpressions
-- 
+
 ### Changed
 core/pom.xml
 core/src/main/scala/core/DataFrameFromTo.scala

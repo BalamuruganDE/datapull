@@ -167,7 +167,7 @@ class Helper(appConfig: AppConfig) {
 
             vault_exception.append(tmp_string)
 
-            if (retry_count == no_of_retries) {
+            if (retry_count >= no_of_retries) {
               exceptions = true
               throw ex
             }

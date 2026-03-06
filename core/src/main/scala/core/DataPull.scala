@@ -132,7 +132,12 @@ object DataPull extends Serializable {
 
 
       val helper = new Helper(config)
-      ec2Role = helper.GetEC2Role()
+      try {
+        ec2Role = helper.GetEC2Role()
+      } catch {
+        case e: Exception =>
+          println("Warning: Unable to retrieve EC2 role via IMDS, defaulting to 'local'. Error: " + e.getMessage)
+      }
     }
     applicationId = sparkSession.sparkContext.applicationId
 
