@@ -668,7 +668,6 @@ public class DataPullTask implements Runnable {
             }
         }
 
-
         return listClustersResult;
     }
 

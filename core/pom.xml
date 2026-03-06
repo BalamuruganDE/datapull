@@ -10,6 +10,7 @@
 
     <properties>
         <scala.version>2.12</scala.version>
+        <scala.full.version>2.12.18</scala.full.version>
         <spark.version>3.5.0</spark.version>
         <spark.avro.version>4.0.0</spark.avro.version>
         <scala.plugin.version>3.4.2</scala.plugin.version>
@@ -75,7 +76,10 @@
             <plugin>
                 <groupId>net.alchim31.maven</groupId>
                 <artifactId>scala-maven-plugin</artifactId>
-                <version>3.3.3</version>
+                <version>4.8.1</version>
+                <configuration>
+                    <scalaVersion>${scala.full.version}</scalaVersion>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>
@@ -461,7 +465,7 @@
         <dependency>
             <groupId>org.codehaus.jettison</groupId>
             <artifactId>jettison</artifactId>
-            <version>1.4.2</version>
+            <version>1.4.1</version>
         </dependency>
 
         <!--<HomeAway specific libraries>-->
@@ -482,6 +486,10 @@
                 <exclusion>
                     <groupId>org.scala-lang</groupId>
                     <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.oracle.jdbc</groupId>
+                    <artifactId>ojdbc7</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
