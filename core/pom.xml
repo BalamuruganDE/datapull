@@ -358,22 +358,17 @@
         <dependency>
             <groupId>org.elasticsearch.client</groupId>
             <artifactId>elasticsearch-rest-client</artifactId>
-            <version>7.17.0</version>
+            <version>8.11.0</version>
         </dependency>
         <dependency>
             <groupId>org.elasticsearch</groupId>
             <artifactId>elasticsearch</artifactId>
-            <version>7.17.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.elasticsearch.client</groupId>
-            <artifactId>elasticsearch-rest-high-level-client</artifactId>
-            <version>7.17.0</version>
+            <version>8.11.0</version>
         </dependency>
         <dependency>
             <groupId>org.elasticsearch</groupId>
             <artifactId>elasticsearch-spark-30_2.12</artifactId>
-            <version>7.17.0</version>
+            <version>8.11.0</version>
         </dependency>
         <dependency>
             <groupId>commons-httpclient</groupId>
