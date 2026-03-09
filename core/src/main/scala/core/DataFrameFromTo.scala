@@ -790,21 +790,24 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
       )
       val dfMongo = sparkSession.read.format("mongodb").options(readConfig).load()
 
-      // Writing to temporary JSON files with partitioning
+      // Convert each row to a whole-document JSON string (matching old behavior)
+      import org.apache.spark.sql.functions.{struct, to_json}
+      val dfAsJson = dfMongo.withColumn("jsonfield", to_json(struct(dfMongo.columns.map(col): _*)))
+        .select("jsonfield")
+
+      // Write to temporary JSON files with 20K-row partitioning
       val tmpLocation = "s3a://" + tmpFileLocation
-      val partitionedDF = dfMongo.withColumn("partition", (monotonically_increasing_id() / 1).cast(IntegerType))
-        .repartition(col("partition"))
-        .withColumnRenamed("_id", "jsonfield")
+      val partitionedDF = dfAsJson.withColumn("partition", (monotonically_increasing_id() / 20000).cast(IntegerType))
 
       partitionedDF.write
         .mode(SaveMode.Overwrite)
         .partitionBy("partition")
         .json(tmpLocation)
 
-      // Reading back the data and renaming fields
+      // Read back the data
       val dfBig = sparkSession.read
         .json(tmpLocation)
-        .withColumnRenamed("value", "jsonfield")
+        .select("jsonfield")
 
       dfBig
 
