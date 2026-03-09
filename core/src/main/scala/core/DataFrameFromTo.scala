@@ -32,6 +32,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import org.apache.spark.sql.functions.{col, monotonically_increasing_id}
 import org.apache.spark.sql.types.IntegerType
+import org.apache.spark.sql.Encoders
 
 import scala.collection.mutable
 import config.AppConfig
@@ -805,7 +806,7 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
         .select("jsonfield")
 
       // Write to temporary JSON files with 20K-row partitioning
-      val tmpLocation = "s3a://" + tmpFileLocation
+      val tmpLocation = if (tmpFileLocation.startsWith("s3://") || tmpFileLocation.startsWith("s3a://")) tmpFileLocation else "s3a://" + tmpFileLocation
       val partitionedDF = dfAsJson.withColumn("partition", (monotonically_increasing_id() / 20000).cast(IntegerType))
 
       partitionedDF.write
@@ -878,21 +879,13 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
     val writeConfig = sparkOptions
 
     if (documentfromjsonfield.toBoolean) {
-      import org.apache.spark.sql.{Encoder, Encoders}
-      import org.apache.spark.rdd.RDD
-      import org.bson.Document
+      // Parse JSON strings from the specified field into a proper DataFrame with schema
+      // The MongoDB Spark Connector v10.x expects a DataFrame with typed columns, not Kryo-encoded BSON
+      val jsonRDD = df.select(jsonfield).rdd.map(row => row.getString(0))
+      val parsedDF = sparkSession.read.json(sparkSession.createDataset(jsonRDD)(Encoders.STRING))
 
-      // Define an implicit encoder for BSON Document
-      implicit val documentEncoder: Encoder[Document] = Encoders.kryo[Document]
-
-      // Convert DataFrame rows to BSON Documents using RDD
-      val bsonRDD: RDD[Document] = df.select(jsonfield).rdd.map(row => Document.parse(row.getString(0)))
-
-      // Convert RDD[Document] to Dataset[Document] using the custom encoder
-      val bsonDS = sparkSession.createDataset(bsonRDD)
-
-      // Write the BSON Dataset to MongoDB
-      bsonDS.write
+      // Write the parsed DataFrame to MongoDB
+      parsedDF.write
         .format("mongodb")
         .options(writeConfig)
         .mode("append")
@@ -1502,9 +1495,8 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
         df.createOrReplaceTempView(srcTable)
         sparkSession.sql(mergeIntoSQL)
       }else {
-        println("Validation Error: mergeinto sql query is not valid, should be in below format")
-        print("MERGE INTO <target-table> target USING <source-table> source ON target.<key> = source.<key> WHEN MATCHED THEN UPDATE SET * WHEN NOT MATCHED THEN INSERT *")
-        System.exit(1)
+        throw new Exception("Validation Error: mergeinto sql query is not valid, should start with 'MERGE INTO'. Expected format: " +
+          "MERGE INTO <target-table> target USING <source-table> source ON target.<key> = source.<key> WHEN MATCHED THEN UPDATE SET * WHEN NOT MATCHED THEN INSERT *")
       }
     } else{
       var extraConfigOptions = stringToMap(sparkoptions)
