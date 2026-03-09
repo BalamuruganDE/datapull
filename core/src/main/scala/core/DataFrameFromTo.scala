@@ -100,14 +100,14 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
         "fileType" -> fileFormat
       )
     }
-    if (fileFormat == "csv") {
+    if (fileFormat.equalsIgnoreCase("csv")) {
       sparkOptions = sparkOptions ++ Map(
         "delimiter" -> delimiter,
         "mode" -> "DROPMALFORMED",
         "header" -> "true",
         "charset" -> charset
       )
-    } else if (fileFormat == "parquet") {
+    } else if (fileFormat.equalsIgnoreCase("parquet")) {
       sparkOptions = sparkOptions ++ Map(
         "mergeSchema" -> mergeSchema.toString.toLowerCase
       )
@@ -231,7 +231,7 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
     var dft = sparkSession.emptyDataFrame
 
     if (coalescefilecount == null) {
-      if (fileFormat == "csv") {
+      if (fileFormat.equalsIgnoreCase("csv")) {
         dft = df.coalesce(1)
       }
       else {
@@ -320,9 +320,18 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
         if (groupByFields != "") {
           dfWriter = dfWriter.partitionBy(groupByFieldsArray: _*)
         }
-        if (fileFormat == "json" | fileFormat == "csv" | fileFormat == "avro"| fileFormat == "orc"
-          | fileFormat == "parquet") {
-          dfWriter.format(fileFormat).option("path",s"$filePrefixString$filePath").save()
+        val normalizedFormat = fileFormat.toLowerCase
+        if (normalizedFormat == "json" | normalizedFormat == "csv" | normalizedFormat == "avro"
+          | normalizedFormat == "orc" | normalizedFormat == "parquet") {
+          dfWriter.format(normalizedFormat).option("path",s"$filePrefixString$filePath").save()
+        } else if (normalizedFormat == "sequencefile") {
+          dft.toJSON.rdd.zipWithIndex.map { case (v, i) => (i, v) }.saveAsSequenceFile(s"$filePrefixString$filePath", Some(classOf[org.apache.hadoop.io.compress.DefaultCodec]))
+        } else if (normalizedFormat == "sequencefilesnappy") {
+          dft.toJSON.rdd.zipWithIndex.map { case (v, i) => (i, v) }.saveAsSequenceFile(s"$filePrefixString$filePath", Some(classOf[org.apache.hadoop.io.compress.SnappyCodec]))
+        } else if (normalizedFormat == "sequencefiledeflate") {
+          dft.toJSON.rdd.zipWithIndex.map { case (v, i) => (i, v) }.saveAsSequenceFile(s"$filePrefixString$filePath", Some(classOf[org.apache.hadoop.io.compress.DeflateCodec]))
+        } else {
+          throw new UnsupportedOperationException(s"Unsupported file format: $fileFormat")
         }
       }
     }

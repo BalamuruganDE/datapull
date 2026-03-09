@@ -142,7 +142,7 @@ object DataPull extends Serializable {
     applicationId = sparkSession.sparkContext.applicationId
 
     sparkSession.udf.register("validateUUID", validateUUID _)
-    //sparkSession.udf.register("uuidToBinary", uuidToBinary _)
+    sparkSession.udf.register("uuidToBinary", uuidToBinary _)
     sparkSession.udf.register("binaryToUUID", binaryToUUID _)
     sparkSession.udf.register("uuid", uuid _)
     sparkSession.udf.register("binaryToJUUID", binaryToJUUID _)
@@ -400,8 +400,9 @@ object DataPull extends Serializable {
   }
   */
 
-  def uuidToBinary(uuid: UUID): Binary = {
-    new Binary(uuid.toString.getBytes)
+  def uuidToBinary(uuid_key: String): Binary = {
+    if (uuid_key == null) null
+    else new Binary(UUID.fromString(uuid_key).toString.getBytes)
   }
 
   def binaryToUUID(byte: Array[Byte]): String = {

@@ -386,6 +386,9 @@ class Migration extends SparkListener {
           sparkSession
         )
       } else if (destinationMap("platform") == "iceberg") {
+        if (!destinationMap.contains("table") || !destinationMap.contains("database")) {
+          throw new Exception("Iceberg destination requires 'table' and 'database' fields in the pipeline JSON")
+        }
         dataframeFromTo.dataFrameToIceberg(sparkSession, dft, destinationMap("table"), destinationMap("database"), destinationMap.getOrElse("savemode","append"),
           destinationMap.getOrElse("ismergeinto","false").toBoolean, destinationMap.getOrElse("mergeintosql"," ")
           ,destinationMap.getOrElse("sparkoptions",""))
