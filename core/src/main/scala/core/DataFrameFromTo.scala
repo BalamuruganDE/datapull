@@ -1490,7 +1490,7 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
                          table: String, database: String, saveMode: String, isMergeInto: Boolean,
                          mergeIntoSQL: String, sparkoptions: Option[JSONObject]): Unit = {
 
-    helper.IcebergUtils.configureIcebergCatalog(sparkSession)
+    IcebergUtils.configureIcebergCatalog(sparkSession)
 
     sparkSession.sql("use " + database)
 
@@ -1543,7 +1543,7 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
 
   def icebergToDataFrame(sparkSession: org.apache.spark.sql.SparkSession,
                          query: String): org.apache.spark.sql.DataFrame = {
-    helper.IcebergUtils.configureIcebergCatalog(sparkSession)
+    IcebergUtils.configureIcebergCatalog(sparkSession)
 
     sparkSession.sql(query)
   }

@@ -391,7 +391,7 @@ class Migration extends SparkListener {
         // Support dynamic partition overwrite via partitioncolumns
         val partitionColumns = destinationMap.get("partitioncolumns").map(_.split(",").map(_.trim).toSeq).getOrElse(Seq.empty)
         if (partitionColumns.nonEmpty && destinationMap.getOrElse("savemode", "append").equalsIgnoreCase("overwrite")) {
-          helper.IcebergUtils.processTablePartitionsDynamic(sparkSession, dft, destinationMap("database"), destinationMap("table"), partitionColumns)
+          IcebergUtils.processTablePartitionsDynamic(sparkSession, dft, destinationMap("database"), destinationMap("table"), partitionColumns)
         } else {
           dataframeFromTo.dataFrameToIceberg(sparkSession, dft, destinationMap("table"), destinationMap("database"), destinationMap.getOrElse("savemode", "append"),
             destinationMap.getOrElse("ismergeinto", "false").toBoolean, destinationMap.getOrElse("mergeintosql", " ")
@@ -402,7 +402,7 @@ class Migration extends SparkListener {
         val dedupKeyColumns = destinationMap.get("dedupkeycolumns").map(_.split(",").map(_.trim).toSeq).getOrElse(Seq.empty)
         if (dedupKeyColumns.nonEmpty) {
           val orderByCol = destinationMap.get("deduporderbycolumn")
-          helper.IcebergUtils.icebergTableDeduplication(sparkSession, destinationMap("database"), destinationMap("table"), dedupKeyColumns, orderByCol)
+          IcebergUtils.icebergTableDeduplication(sparkSession, destinationMap("database"), destinationMap("table"), dedupKeyColumns, orderByCol)
         }
       }
 
