@@ -258,7 +258,7 @@ public class DataPullRequestProcessor implements DataPullClientService {
             log.debug("runDataPull <- return");
     }
 
-    List<String> rotateSubnets(){
+    synchronized List<String> rotateSubnets(){
 
         if(subnets.isEmpty()){
             subnets= getSubnet();
@@ -268,7 +268,8 @@ public class DataPullRequestProcessor implements DataPullClientService {
             subnets.clear();
             subnets.addAll(subnetIds_shuffled);
         }
-        return subnets;
+        subnets.removeIf(s -> StringUtils.isBlank(s));
+        return new ArrayList<>(subnets);
     }
 
    Map<String,List<DescribeStepRequest>> getStepForPipeline(){
@@ -279,7 +280,9 @@ public class DataPullRequestProcessor implements DataPullClientService {
 
         List<String> subnetIds = new ArrayList<>();
 
-        subnetIds.add(dataPullProperties.getApplicationSubnet1());
+        if (StringUtils.isNotBlank(dataPullProperties.getApplicationSubnet1())) {
+            subnetIds.add(dataPullProperties.getApplicationSubnet1());
+        }
 
         if (StringUtils.isNotBlank(dataPullProperties.getApplicationSubnet2())) {
             subnetIds.add(dataPullProperties.getApplicationSubnet2());

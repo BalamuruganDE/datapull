@@ -386,12 +386,24 @@ class Migration extends SparkListener {
           sparkSession
         )
       } else if (destinationMap("platform") == "iceberg") {
-        if (!destinationMap.contains("table") || !destinationMap.contains("database")) {
-          throw new Exception("Iceberg destination requires 'table' and 'database' fields in the pipeline JSON")
+        val extraSparkOptions = (if (destination.optJSONObject("sparkoptions") == null) None else Some(destination.optJSONObject("sparkoptions")))
+
+        // Support dynamic partition overwrite via partitioncolumns
+        val partitionColumns = destinationMap.get("partitioncolumns").map(_.split(",").map(_.trim).toSeq).getOrElse(Seq.empty)
+        if (partitionColumns.nonEmpty && destinationMap.getOrElse("savemode", "append").equalsIgnoreCase("overwrite")) {
+          helper.IcebergUtils.processTablePartitionsDynamic(sparkSession, dft, destinationMap("database"), destinationMap("table"), partitionColumns)
+        } else {
+          dataframeFromTo.dataFrameToIceberg(sparkSession, dft, destinationMap("table"), destinationMap("database"), destinationMap.getOrElse("savemode", "append"),
+            destinationMap.getOrElse("ismergeinto", "false").toBoolean, destinationMap.getOrElse("mergeintosql", " ")
+            , extraSparkOptions)
         }
-        dataframeFromTo.dataFrameToIceberg(sparkSession, dft, destinationMap("table"), destinationMap("database"), destinationMap.getOrElse("savemode","append"),
-          destinationMap.getOrElse("ismergeinto","false").toBoolean, destinationMap.getOrElse("mergeintosql"," ")
-          ,destinationMap.getOrElse("sparkoptions",""))
+
+        // Post-write deduplication if configured
+        val dedupKeyColumns = destinationMap.get("dedupkeycolumns").map(_.split(",").map(_.trim).toSeq).getOrElse(Seq.empty)
+        if (dedupKeyColumns.nonEmpty) {
+          val orderByCol = destinationMap.get("deduporderbycolumn")
+          helper.IcebergUtils.icebergTableDeduplication(sparkSession, destinationMap("database"), destinationMap("table"), dedupKeyColumns, orderByCol)
+        }
       }
 
       if (dft.isStreaming) {

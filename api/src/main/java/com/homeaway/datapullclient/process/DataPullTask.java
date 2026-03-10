@@ -409,9 +409,9 @@ public class DataPullTask implements Runnable {
                 .withInstanceTypeConfigs(workerInstanceTypeConfig)
                 .withTargetOnDemandCapacity(count);
 
-        System.out.println("Printing random subnet : " + subnets);
+        log.info("Printing random subnet : {}", subnets);
 
-        System.out.println("Printing selected subnet-ID for EMR cluster creation : " +  subnets.get(0));
+        log.info("Printing selected subnet-ID for EMR cluster creation : {}", subnets.isEmpty() ? "N/A" : subnets.get(0));
 
         final String masterSG = emrProperties.getEmrSecurityGroupMaster();
         final String slaveSG = emrProperties.getEmrSecurityGroupSlave();
@@ -423,10 +423,6 @@ public class DataPullTask implements Runnable {
         final String serviceAccessSecurityGroup = Objects.toString(
                 this.clusterProperties.getServiceAccessSecurityGroup(), serviceAccesss != null ? serviceAccesss : "");
 
-        if(StringUtils.isNotBlank(clusterProperties.getSubnetId())){
-            subnets.add(0,clusterProperties.getSubnetId());
-        }
-
 //      Introducing below logic to address null and invalid subnet issue
         String getSubnetId = clusterProperties.getSubnetId();
         String finalSubnetId;
@@ -434,20 +430,20 @@ public class DataPullTask implements Runnable {
 
         if (StringUtils.isNotBlank(getSubnetId) && getSubnetId.startsWith("subnet-")) {
             finalSubnetId = getSubnetId;
-            System.out.println("Subnet '" + finalSubnetId + "' provided by the user will be used for EMR cluster creation.");
+            log.info("Subnet '{}' provided by the user will be used for EMR cluster creation.", finalSubnetId);
         } else {
             if (StringUtils.isNotBlank(getSubnetId)) {
-                System.out.println("The user provided an invalid value '" + getSubnetId + "' for subnet. Hence, default subnet pool will be used for EMR creation.");
+                log.warn("The user provided an invalid value '{}' for subnet. Hence, default subnet pool will be used for EMR creation.", getSubnetId);
             } else {
-                System.out.println("The user either provided a NULL value for the subnet or did not specify subnet in the payload. Hence, the default subnet pool will be used for EMR creation.");
+                log.info("The user either provided a NULL value for the subnet or did not specify subnet in the payload. Hence, the default subnet pool will be used for EMR creation.");
             }
 
-            Set<String> subnetsDeduped = new LinkedHashSet<>(subnets);
-            subnets.clear();
-            subnets.addAll(subnetsDeduped);
+            if (subnets.isEmpty()) {
+                throw new IllegalStateException("No valid subnets available in the default subnet pool. Please configure at least one application_subnet property.");
+            }
 
             finalSubnetId = subnets.get(0);
-            System.out.println("EMR cluster will be created using a subnet from the default subnet pool: " + finalSubnetId);
+            log.info("EMR cluster will be created using a subnet from the default subnet pool: {}", finalSubnetId);
         }
 
         final JobFlowInstancesConfig jobConfig = new JobFlowInstancesConfig()

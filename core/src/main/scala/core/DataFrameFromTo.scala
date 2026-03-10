@@ -764,7 +764,13 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
     } catch {
       case e: Throwable => e.printStackTrace
         throw (e)
-    } 
+    } finally {
+      if (connection != null) {
+        if (!connection.isClosed) {
+          connection.close()
+        }
+      }
+    }
   }
 
   def mongodbToDataFrame(awsEnv: String, cluster: String, overrideconnector: String, database: String, authenticationDatabase: String, collection: String, login: String, password: String, sparkSession: org.apache.spark.sql.SparkSession, vaultEnv: String, addlSparkOptions: JSONObject, secretStore: String, authenticationEnabled: String, tmpFileLocation: String, sampleSize: String, sslEnabled: String): org.apache.spark.sql.DataFrame = {
@@ -1481,10 +1487,21 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
   }
 
   def dataFrameToIceberg(sparkSession: SparkSession, df: org.apache.spark.sql.DataFrame,
-                         table: String, database: String, saveMode: String, isMergeInto:Boolean,
-                         mergeIntoSQL:String, sparkoptions:String ): Unit = {
+                         table: String, database: String, saveMode: String, isMergeInto: Boolean,
+                         mergeIntoSQL: String, sparkoptions: Option[JSONObject]): Unit = {
+
+    helper.IcebergUtils.configureIcebergCatalog(sparkSession)
 
     sparkSession.sql("use " + database)
+
+    /*
+    allow to insert the data to target table only if these conditions met
+    case-1: source dataframe columns <= target dataframe columns
+    case-2: source dataframe columns and datatypes == target dataframe columns and datatypes
+     */
+    val targetDf = sparkSession.sql(s"SELECT * FROM $table limit 100")
+    val srcDf = df
+    validateIcebergSchema(srcDf, targetDf)
 
     if (isMergeInto) {
       //validating MergeIntoQuery
@@ -1495,16 +1512,16 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
         df.createOrReplaceTempView(srcTable)
         sparkSession.sql(mergeIntoSQL)
       }else {
-        throw new Exception("Validation Error: mergeinto sql query is not valid, should start with 'MERGE INTO'. Expected format: " +
+        throw new IllegalArgumentException("Validation Error: mergeinto sql query is not valid, should start with 'MERGE INTO'. Expected format: " +
           "MERGE INTO <target-table> target USING <source-table> source ON target.<key> = source.<key> WHEN MATCHED THEN UPDATE SET * WHEN NOT MATCHED THEN INSERT *")
       }
     } else{
-      var extraConfigOptions = stringToMap(sparkoptions)
-
-      if (extraConfigOptions.isEmpty){
-        extraConfigOptions = extraConfigOptions ++ Map("overwrite-mode" -> "dynamic")
-      } else if (extraConfigOptions.get("overwrite-mode").isEmpty){
-        extraConfigOptions = extraConfigOptions ++ Map("overwrite-mode" -> "dynamic")
+      var extraConfigOptions= Map.empty[String, String]
+      sparkoptions match {
+        case Some(jsonObj) if jsonObj != null =>
+          extraConfigOptions = jsonObjectPropertiesToMap(sparkoptions.get)
+        case _ =>
+          extraConfigOptions = extraConfigOptions ++ Map("overwrite-mode" -> "dynamic")
       }
 
       if (saveMode.toLowerCase == "overwrite") {
@@ -1522,30 +1539,40 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
     }
   }
 
-  import scala.collection.mutable.{Map => MutableMap}
-
-  def stringToMap(input: String): MutableMap[String, String] = {
-    val resultMap = MutableMap[String, String]()
-
-    if (input == null || input.trim.isEmpty) {
-      return resultMap
-    }
-
-    val pairs = input.split(",").map(_.trim)
-
-    for (pair <- pairs) {
-      val keyValue = pair.split(":").map(_.trim)
-      if (keyValue.length == 2) {
-        resultMap(keyValue(0)) = keyValue(1)
-      }
-    }
-
-    resultMap
-  }
+  import scala.collection.mutable.Map
 
   def icebergToDataFrame(sparkSession: org.apache.spark.sql.SparkSession,
                          query: String): org.apache.spark.sql.DataFrame = {
+    helper.IcebergUtils.configureIcebergCatalog(sparkSession)
+
     sparkSession.sql(query)
+  }
+
+  import org.apache.spark.sql.types._
+
+  def validateIcebergSchema(srcDf: org.apache.spark.sql.DataFrame, tgtDf: org.apache.spark.sql.DataFrame): Unit = {
+
+    val srcSchema = srcDf.schema
+    val tgtSchema = tgtDf.schema
+
+    val srcFields = srcSchema.fields.map(f => f.name.toLowerCase -> f.dataType).toMap
+    val tgtFields = tgtSchema.fields.map(f => f.name.toLowerCase -> f.dataType).toMap
+
+    // Check if src has more columns than tgt (which is not allowed)
+    if (srcFields.size > tgtFields.size) {
+      throw new IllegalArgumentException("Source DataFrame has more columns than target DataFrame")
+    }
+
+    // Check if all src columns exist in tgt and types match
+    srcFields.foreach { case (srcCol, srcType) =>
+      tgtFields.get(srcCol) match {
+        case Some(tgtType) if tgtType == srcType => // All good
+        case Some(tgtType) =>
+          throw new IllegalArgumentException(s"Data type mismatch for column '$srcCol'. Src: $srcType, Tgt: $tgtType")
+        case None =>
+          throw new IllegalArgumentException(s"Column '$srcCol' is missing in target schema")
+      }
+    }
   }
 
 }
