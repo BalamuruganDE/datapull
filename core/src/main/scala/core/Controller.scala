@@ -96,7 +96,7 @@ class Controller(appConfig: AppConfig, pipeline: String) {
         val migration = new Migration()
 
         def runner(migrationJsonString: String) = Future {
-          migration.migrate(migrationJsonString, reportEmailAddress, poolId, verifymigration, reportCounts, no_of_retries, custom_retries, jobId, sparkSession.sparkContext.isLocal, preciseCounts, appConfig, pipelineName)
+          migration.migrate(migrationJsonString, reportEmailAddress, poolId, verifymigration, reportCounts, no_of_retries, custom_retries, jobId, sparkSession, preciseCounts, appConfig, pipelineName)
         }
 
         try {
@@ -125,7 +125,7 @@ class Controller(appConfig: AppConfig, pipeline: String) {
         breakableLoop.breakable {
           for (i <- 0 to migrations.length() - 1) {
             var migration = new Migration()
-            val migrationResult: Map[String, String] = migration.migrate(migrations.getJSONObject(i).toString(), reportEmailAddress, i.toString, verifymigration, reportCounts, no_of_retries, custom_retries, jobId, sparkSession.sparkContext.isLocal, preciseCounts, appConfig, pipelineName)
+            val migrationResult: Map[String, String] = migration.migrate(migrations.getJSONObject(i).toString(), reportEmailAddress, i.toString, verifymigration, reportCounts, no_of_retries, custom_retries, jobId, sparkSession, preciseCounts, appConfig, pipelineName)
             reportbodyHtml.append(migrationResult("reportRowHtml"))
             if (migrationResult("migrationError") != null)
               migrationErrors += migrationResult("migrationError")

@@ -127,6 +127,7 @@ object DataPull extends Serializable {
         //.config("spark.sql.hive.metastore.version", "1.2.1")
         .config("spark.sql.hive.metastore.jars", "builtin")
         .config("spark.sql.hive.caseSensitiveInferenceMode", "NEVER_INFER")
+        .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
         .enableHiveSupport()
         .getOrCreate()
 

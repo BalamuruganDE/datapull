@@ -42,39 +42,13 @@ class Migration extends SparkListener {
   val secretStoreDefaultValue: String = "vault"
   var appConfig: AppConfig = null;
 
-  def migrate(migrationJSONString: String, reportEmailAddress: String, migrationId: String, verifymigration: Boolean, reportCounts: Boolean, no_of_retries: Int, custom_retries: Boolean, migrationLogId: String, isLocal: Boolean, preciseCounts: Boolean, appConfig: AppConfig, pipeline: String): Map[String, String] = {
+  def migrate(migrationJSONString: String, reportEmailAddress: String, migrationId: String, verifymigration: Boolean, reportCounts: Boolean, no_of_retries: Int, custom_retries: Boolean, migrationLogId: String, sparkSession: SparkSession, preciseCounts: Boolean, appConfig: AppConfig, pipeline: String): Map[String, String] = {
     val s3TempFolderDeletionError = StringBuilder.newBuilder
     val reportRowHtml = StringBuilder.newBuilder
     val migration: JSONObject = new JSONObject(migrationJSONString)
     val dataPullLogs = new DataPullLog(appConfig, pipeline)
     this.appConfig = appConfig;
     val helper = new Helper(appConfig)
-    var sparkSession: SparkSession = null
-
-    if (isLocal) {
-      sparkSession = SparkSession.builder.master("local[*]")
-        .config("spark.scheduler.mode", "FAIR")
-        .appName("DataPull - local")
-        .config("spark.network.timeout", "10000s")
-        .config("spark.executor.heartbeatInterval", "1000s")
-        .config("spark.sql.broadcastTimeout", 36000)
-        // .config("spark.driver.bindAddress","127.0.0.1")
-        .getOrCreate()
-    } else {
-      sparkSession = SparkSession.builder //.master("local[*]")
-        .config("spark.scheduler.mode", "FAIR")
-        .appName("DataPull")
-        .config("spark.network.timeout", "10000s")
-        .config("spark.executor.heartbeatInterval", "1000s")
-        .config("spark.sql.broadcastTimeout", 36000)
-        .config("spark.task.maxFailures", no_of_retries)
-        .config("fs.s3a.multiobjectdelete.enable", true)
-        //.config("spark.sql.hive.metastore.version", "1.2.1")
-        .config("spark.sql.hive.metastore.jars", "builtin")
-        .config("spark.sql.hive.caseSensitiveInferenceMode", "NEVER_INFER")
-        .enableHiveSupport()
-        .getOrCreate()
-    }
 
     var sources = new JSONArray()
     var destination = new JSONObject()
