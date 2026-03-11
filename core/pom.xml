@@ -368,7 +368,7 @@
         <dependency>
             <groupId>org.elasticsearch</groupId>
             <artifactId>elasticsearch-spark-30_2.12</artifactId>
-            <version>8.11.0</version>
+            <version>8.17.10</version>
         </dependency>
         <dependency>
             <groupId>commons-httpclient</groupId>
