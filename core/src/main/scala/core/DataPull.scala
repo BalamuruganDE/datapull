@@ -401,10 +401,17 @@ object DataPull extends Serializable {
   }
   */
 
-  def uuidToBinary(uuid_key: String): Binary = {
+def uuidToBinary(uuid_key: String): Array[Byte] = {
     if (uuid_key == null) null
-    else new Binary(UUID.fromString(uuid_key).toString.getBytes)
-  }
+    else {
+      val uuid = UUID.fromString(uuid_key)
+      val bb = ByteBuffer.allocate(16)
+      bb.putLong(uuid.getMostSignificantBits)
+      bb.putLong(uuid.getLeastSignificantBits)
+      bb.array()
+    }
+}
+
 
   def binaryToUUID(byte: Array[Byte]): String = {
 
