@@ -137,6 +137,10 @@ class Helper(appConfig: AppConfig) {
           connection.setRequestMethod(requestMethod)
           httpHeaders.foreach(h => connection.setRequestProperty(h._1, h._2))
 
+          if (requestMethod.equalsIgnoreCase("PUT") || requestMethod.equalsIgnoreCase("POST")) {
+            connection.setDoOutput(true)
+          }
+
           if (jsonBody != "") {
 
             connection.setRequestMethod("POST")
