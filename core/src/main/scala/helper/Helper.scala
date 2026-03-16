@@ -362,7 +362,7 @@ class Helper(appConfig: AppConfig) {
   }
 
   def ReplaceInlineExpressions(inputString: String, sparkSession: org.apache.spark.sql.SparkSession): String = {
-    val RegexForInlineExpr = """inlineexpr\{\{(.*)}}""".r
+    val RegexForInlineExpr = """inlineexpr\{\{(.*?)}}""".r
     val returnVal = RegexForInlineExpr.replaceAllIn(inputString, _ match { case RegexForInlineExpr(inlineExprr) => println(inlineExprr);
       val df = sparkSession.sql(inlineExprr);
       val rows = df.take(1);
@@ -371,7 +371,7 @@ class Helper(appConfig: AppConfig) {
       } else ""
     })
 
-    val RegexForInlineSecret = """inlinesecret\{\{(.*)}}""".r
+    val RegexForInlineSecret = """inlinesecret\{\{(.*?)}}""".r
     RegexForInlineSecret.replaceAllIn(returnVal, _ match { case RegexForInlineSecret(inlineExprr) => println(inlineExprr);
       val inlineExprrAsJson = new JSONObject(new JSONObject("{\"data\": \"{" + inlineExprr + "}\"}").getString("data"))
       if (inlineExprrAsJson.has("secretstore") && inlineExprrAsJson.has("secretname")) {
