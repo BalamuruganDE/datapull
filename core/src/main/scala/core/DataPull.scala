@@ -40,6 +40,8 @@ import security._
 import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks.breakable
 
+
+
 // Main class
 object DataPull extends Serializable {
 
@@ -303,9 +305,15 @@ object DataPull extends Serializable {
     val keys = properties.keys()
     while (keys.hasNext()) {
       val key = keys.next().toString()
-      sparkSession.conf.set(key, properties.getString(key))
+      try {
+        sparkSession.conf.set(key, properties.getString(key))
+      } catch {
+        case e: org.apache.spark.sql.AnalysisException =>
+          println(s"Warning: Cannot set static Spark config '$key' at runtime, skipping. ${e.getMessage}")
+      }
     }
   }
+
 
   def setAWSCredentialsByPrefix(sparkSession: org.apache.spark.sql.SparkSession, sourceDestinationMap: Map[String, String], s3Prefix: String): Unit = {
     if (sourceDestinationMap.contains("awssecretaccesskey") && sourceDestinationMap("awssecretaccesskey") != "") {
@@ -433,6 +441,7 @@ def uuidToBinary(uuid_key: String): Array[Byte] = {
     }
     returnMap
   }
+
 
   /**
    * Binary data to JUUID String representation
