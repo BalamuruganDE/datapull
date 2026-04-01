@@ -184,7 +184,7 @@ class Migration extends SparkListener {
       else if (destinationMap("platform") == "mssql" || destinationMap("platform") == "mysql" || destinationMap("platform") == "postgres" || destinationMap("platform") == "oracle" || destinationMap("platform") == "teradata") {
         dataframeFromTo.dataFrameToRdbms(
           platform = destinationMap("platform"),
-          url = destinationMap("url"),
+          url = destinationMap.getOrElse("url", ""),
           awsEnv = destinationMap("awsenv"),
           server = destinationMap("server"),
           database = destinationMap("database"),
@@ -789,7 +789,7 @@ class Migration extends SparkListener {
         if (platform == "mssql" || platform == "mysql" || platform == "oracle" || platform == "postgres" || platform == "teradata") {
           dataframeFromTo.rdbmsRunCommand(
             platform = platform,
-            url = propertiesMap("url"),
+            url = propertiesMap.getOrElse("url", ""),
             awsEnv = propertiesMap("awsenv"),
             server = propertiesMap("server"),
             port = propertiesMap.getOrElse("port", null),

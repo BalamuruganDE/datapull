@@ -403,7 +403,7 @@ class Helper(appConfig: AppConfig) {
       val colType=  jsonObjectPropertiesToMap(inlineexprforjdbcasJson).get("coltype")
       val rs=  dataframeFromTo.rdbmsRunCommand(
         platform = platformObject.getString("platform"),
-        url = propertiesMap("url"),
+        url = propertiesMap.getOrElse("url", ""),
         awsEnv = propertiesMap("awsenv"),
         server = propertiesMap("server"),
         port = propertiesMap.getOrElse("port", null),
