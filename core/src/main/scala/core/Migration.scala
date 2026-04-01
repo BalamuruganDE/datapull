@@ -784,7 +784,6 @@ class Migration extends SparkListener {
       lengthOfArray = command.length()
 
       for (i <- 0 to lengthOfArray - 1) {
-
         val dataframeFromTo = new DataFrameFromTo(appConfig, pipeline)
         if (platform == "mssql" || platform == "mysql" || platform == "oracle" || platform == "postgres" || platform == "teradata") {
           dataframeFromTo.rdbmsRunCommand(

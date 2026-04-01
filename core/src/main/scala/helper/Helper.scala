@@ -394,6 +394,7 @@ class Helper(appConfig: AppConfig) {
 
   }
 
+
   def ReplaceInlineExpressions(platformObject: JSONObject, optionalJsonPropertiesList:List[String]): JSONObject ={
     val RegexForJDBCInlineExpr = """inlineexprforjdbc\{\{(.*?)}}""".r
     val returnVal=  RegexForJDBCInlineExpr.replaceAllIn(platformObject.toString, _ match { case RegexForJDBCInlineExpr(inlineExprr) => println(inlineExprr);
