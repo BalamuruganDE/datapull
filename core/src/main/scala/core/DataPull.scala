@@ -40,7 +40,7 @@ import security._
 import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks.breakable
 
-
+//import com.expedia.hdw.common.parallax.ParallaxHash
 
 // Main class
 object DataPull extends Serializable {
@@ -149,6 +149,7 @@ object DataPull extends Serializable {
     sparkSession.udf.register("binaryToUUID", binaryToUUID _)
     sparkSession.udf.register("uuid", uuid _)
     sparkSession.udf.register("binaryToJUUID", binaryToJUUID _)
+//    sparkSession.udf.register("stringToParallaxHash", stringToParallaxHash _)
 
     stepSubmissionTime = Instant.now().toString
 
@@ -312,6 +313,17 @@ object DataPull extends Serializable {
           println(s"Warning: Cannot set static Spark config '$key' at runtime, skipping. ${e.getMessage}")
       }
     }
+    // Spark 3.x: if writeLegacyFormat=true (INT96 timestamps), automatically inject rebase
+    // modes to LEGACY to prevent SparkUpgradeException on write. Only set if the pipeline
+    // has not explicitly provided its own value.
+    if (properties.optString("spark.sql.parquet.writeLegacyFormat", "").equalsIgnoreCase("true")) {
+      if (properties.optString("spark.sql.parquet.int96RebaseModeInWrite", "").isEmpty) {
+        sparkSession.conf.set("spark.sql.parquet.int96RebaseModeInWrite", "LEGACY")
+      }
+      if (properties.optString("spark.sql.parquet.int96RebaseModeInRead", "").isEmpty) {
+        sparkSession.conf.set("spark.sql.parquet.int96RebaseModeInRead", "LEGACY")
+      }
+    }
   }
 
 
@@ -442,6 +454,12 @@ def uuidToBinary(uuid_key: String): Array[Byte] = {
     returnMap
   }
 
+//  def stringToParallaxHash(stringData: String): String = {
+//    if (stringData == null) null
+//    else {
+//      ParallaxHash.parallaxHash().hash(stringData.toLowerCase)
+//    }
+//  }
 
   /**
    * Binary data to JUUID String representation

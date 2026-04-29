@@ -31,6 +31,8 @@ import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
+
+
 @Slf4j
 @Data
 public class DataPullTask implements Runnable {
@@ -205,7 +207,27 @@ public class DataPullTask implements Runnable {
         final List<String> sparkSubmitParamsList = new ArrayList<>();
         String[] sparkSubmitParamsArray = null;
         if (SparkSubmitParams != "") {
-            sparkSubmitParamsArray = SparkSubmitParams.split("\\s+");
+            // Fix 1: Upgrade Scala 2.11 packages to 2.12 for Spark 3.5 compatibility
+            String normalizedParams = SparkSubmitParams.replaceAll("_2\\.11:[^,\\s]+", "_2.12:3.5.0");
+
+            // Fix 2: If writeLegacyFormat=true is present (INT96 timestamps), inject rebase modes
+            // to prevent SparkUpgradeException on Spark 3.2+. Only inject if not already set.
+            // Must insert before --class so the flags are not passed as app args to main().
+            if (normalizedParams.contains("spark.sql.parquet.writeLegacyFormat=true")
+                    && !normalizedParams.contains("spark.sql.parquet.int96RebaseModeInWrite")) {
+                String rebaseConfs = " --conf spark.sql.parquet.int96RebaseModeInWrite=LEGACY"
+                        + " --conf spark.sql.parquet.int96RebaseModeInRead=LEGACY";
+                int classIdx = normalizedParams.indexOf(" --class ");
+                if (classIdx >= 0) {
+                    normalizedParams = normalizedParams.substring(0, classIdx)
+                            + rebaseConfs
+                            + normalizedParams.substring(classIdx);
+                } else {
+                    normalizedParams = normalizedParams + rebaseConfs;
+                }
+            }
+
+            sparkSubmitParamsArray = normalizedParams.split("\\s+");
 
             sparkSubmitParamsList.add("spark-submit");
 
@@ -279,7 +301,19 @@ public class DataPullTask implements Runnable {
 
         Map<String, String> hdfsProperties = this.clusterProperties.getHdfsProperties();
 
-        Map<String, String> sparkDefaultsProperties = this.clusterProperties.getSparkDefaultsProperties();
+        // Safety defaults for Spark 3.x compatibility.
+        // Pipeline-level spark_defaults_properties override these if explicitly set.
+        Map<String, String> sparkDefaultsProperties = new HashMap<>();
+        sparkDefaultsProperties.put("spark.sql.parquet.datetimeRebaseModeInWrite", "LEGACY");
+        sparkDefaultsProperties.put("spark.sql.parquet.datetimeRebaseModeInRead", "LEGACY");
+        // Spark 3.x changed timeParserPolicy default to CORRECTED: to_date(col) without a format
+        // string silently returns NULL for non-standard date formats. LEGACY restores Spark 2.x
+        // lenient parsing so existing sql.query expressions continue to produce correct results.
+        sparkDefaultsProperties.put("spark.sql.legacy.timeParserPolicy", "LEGACY");
+        // Spark 3.x changed storeAssignmentPolicy default from LEGACY to ANSI: implicit type casts
+        // on Hive writes (e.g. INT -> BIGINT) that worked in Spark 2.x now throw AnalysisException.
+        sparkDefaultsProperties.put("spark.sql.storeAssignmentPolicy", "LEGACY");
+        sparkDefaultsProperties.putAll(this.clusterProperties.getSparkDefaultsProperties());
         Map<String, String> sparkEnvProperties = this.clusterProperties.getSparkEnvProperties();
         Map<String, String> sparkMetricsProperties = this.clusterProperties.getSparkMetricsProperties();
 

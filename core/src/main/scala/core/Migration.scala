@@ -138,7 +138,16 @@ class Migration extends SparkListener {
         }
         aliases += (if (selectedSource.has("alias")) selectedSource.getString("alias") else "")
 
-        df.createOrReplaceTempView(store)
+        // When caseSensitive=true, JDBC drivers (Teradata, MSSQL) return UPPERCASE column names.
+        // Spark 3.x strictly enforces case, so sql.query references in lowercase would fail with
+        // AnalysisException. Normalize all column names to lowercase before registering the temp
+        // view so that the sql.query works regardless of what the JDBC driver returns.
+        val viewDf = if (sparkSession.conf.getOption("spark.sql.caseSensitive").exists(_.equalsIgnoreCase("true"))) {
+          df.toDF(df.columns.map(_.toLowerCase): _*)
+        } else {
+          df
+        }
+        viewDf.createOrReplaceTempView(store)
 
         platforms += platform
       }
