@@ -207,6 +207,14 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
 
   }
 
+  private def hasEmptyOrNestedEmptySchema(schema: org.apache.spark.sql.types.StructType): Boolean = {
+    if (schema.fields.isEmpty) return true
+    schema.fields.exists {
+      case org.apache.spark.sql.types.StructField(_, s: org.apache.spark.sql.types.StructType, _, _) => hasEmptyOrNestedEmptySchema(s)
+      case _ => false
+    }
+  }
+
   def dataFrameToFile(filePath: String, fileFormat: String, groupByFields: String, s3SaveMode: String, df: org.apache.spark.sql.DataFrame, isS3: Boolean, secretstore: String, sparkSession: SparkSession, coalescefilecount: String, isSFTP: Boolean, login: String, host: String, password: String, pemFilePath: String, awsEnv: String, vaultEnv: String, rowFromJsonString: Boolean, filePrefix: Option[String] = None, addlSparkOptions: Option[JSONObject] = None): Unit = {
 
     if (filePath == null && fileFormat == null && groupByFields == null && s3SaveMode == null && login == null && SparkSession == null) {
@@ -215,6 +223,13 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
 
     if (filePath.isEmpty() && fileFormat.isEmpty() && groupByFields.isEmpty() && s3SaveMode.isEmpty() && login.isEmpty() && sparkSession == null) {
       throw new Exception("Platform cannot have empty values")
+    }
+
+    // Spark 3.5 rejects writing a DataFrame with an empty or nested-empty schema.
+    // Spark 2.x silently wrote an empty file. Guard here to preserve the old behaviour.
+    if (hasEmptyOrNestedEmptySchema(df.schema)) {
+      println(s"Warning: DataFrame has empty or nested-empty schema, skipping write to $filePath")
+      return
     }
 
     //if password isn't set, attempt to get from Vault
@@ -489,6 +504,17 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
       sparkOptions = sparkOptions ++ jsonObjectPropertiesToMap(addlSparkOptions)
     }
 
+    if (sparkOptions.getOrElse("spark.cassandra.connection.ssl.enabled", "false") == "true") {
+      // Java 17 disables TLSv1/1.1 and enforces CA flag on trust anchors; set at runtime
+      // to cover executor JVMs not patched via bootstrap
+      java.security.Security.setProperty("jdk.tls.client.protocols", "TLSv1.2")
+      java.security.Security.setProperty("jdk.security.allowNonCaAnchor", "true")
+      if (!sparkOptions.contains("spark.cassandra.connection.ssl.enabledAlgorithms")) {
+        sparkOptions = sparkOptions ++ Map("spark.cassandra.connection.ssl.enabledAlgorithms" ->
+          "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256")
+      }
+    }
+
     val df = sparkSession
       .read.format("org.apache.spark.sql.cassandra")
       .options(sparkOptions)
@@ -523,6 +549,15 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
 
     if (addlSparkOptions != null) {
       sparkOptions = sparkOptions ++ jsonObjectPropertiesToMap(addlSparkOptions)
+    }
+
+    if (sparkOptions.getOrElse("spark.cassandra.connection.ssl.enabled", "false") == "true") {
+      java.security.Security.setProperty("jdk.tls.client.protocols", "TLSv1.2")
+      java.security.Security.setProperty("jdk.security.allowNonCaAnchor", "true")
+      if (!sparkOptions.contains("spark.cassandra.connection.ssl.enabledAlgorithms")) {
+        sparkOptions = sparkOptions ++ Map("spark.cassandra.connection.ssl.enabledAlgorithms" ->
+          "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256")
+      }
     }
 
     df.write
@@ -832,7 +867,11 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
       var sparkOptions = Map(
         "spark.mongodb.read.connection.uri" -> uri,
         "database" -> database,
-        "collection" -> collection
+        "collection" -> collection,
+        // mongo-spark-connector 10.x (Spark 3.x) changed schema inference: without sampling it
+        // returns empty StructType for complex/nested fields. Force document sampling to match
+        // the old connector behaviour and produce a proper schema.
+        "spark.mongodb.read.inferSchema.sampleSize" -> "1000"
       )
       if (addlSparkOptions != null) {
         sparkOptions = sparkOptions ++ jsonObjectPropertiesToMap(addlSparkOptions)
@@ -840,7 +879,8 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
       if (sampleSize != null) {
         sparkOptions = sparkOptions ++ Map(
           "sampleSize" -> sampleSize,
-          "spark.mongodb.input.sample.sampleSize" -> sampleSize
+          "spark.mongodb.input.sample.sampleSize" -> sampleSize,
+          "spark.mongodb.read.inferSchema.sampleSize" -> sampleSize
         )
       }
 
