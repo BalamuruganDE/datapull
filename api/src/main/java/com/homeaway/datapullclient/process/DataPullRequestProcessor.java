@@ -476,11 +476,13 @@ public class DataPullRequestProcessor implements DataPullClientService {
         for (Migration migration : migrations) {
             if (migration.getSources() != null) {
                 for (Source source : migration.getSources()) {
-                    if (isCassandraWithSSL(source)) return source.getCluster();
+                    if (isCassandraWithSSL(source) && source.getCluster() != null) return source.getCluster();
                 }
             }
-            if (isCassandraWithSSL(migration.getSource()))      return migration.getSource().getCluster();
-            if (isCassandraWithSSL(migration.getDestination())) return migration.getDestination().getCluster();
+            if (isCassandraWithSSL(migration.getSource()) && migration.getSource().getCluster() != null)
+                return migration.getSource().getCluster();
+            if (isCassandraWithSSL(migration.getDestination()) && migration.getDestination().getCluster() != null)
+                return migration.getDestination().getCluster();
         }
         return "";
     }
