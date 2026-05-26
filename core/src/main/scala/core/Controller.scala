@@ -199,9 +199,7 @@ class Controller(appConfig: AppConfig, pipeline: String) {
       subject_local = "Data Pull Report - " + pipelineName + " (" + applicationId + ")"
     }
 
-    if (authenticatedUser != null || authenticatedUser.nonEmpty) {
-      toAddresses = toAddresses + "," + emailAddress
-    }
+
 
     if (appConfig.smtpServerAddress != "SMTP_SERVER") {
       if (!isNullOrEmpty(emailAddress)) {
@@ -239,7 +237,7 @@ class Controller(appConfig: AppConfig, pipeline: String) {
 
           // Set the from, to, subject, body text
           message.setFrom(new InternetAddress(appConfig.dataToolsEmailAddress))
-          message.setRecipients(Message.RecipientType.TO, toAddresses)
+          message.setRecipients(Message.RecipientType.TO, toAddresses.replaceAll(";", ",").replaceAll(",+", ",").stripSuffix(","))
           message.setRecipients(Message.RecipientType.BCC, "" + appConfig.dataToolsEmailAddress)
           message.setSubject(subject_local)
           message.setContent(htmlContent, "text/html; charset=utf-8")

@@ -253,11 +253,12 @@ object DataPull extends Serializable {
     if (awsenv == "prod") {
 
       if (isScheduled) {
-        if (failureEmailAddress != "") {
-          failureEmailAddress = failureEmailAddress + ";" + pagerdutyEmailAddress
+        if (pagerdutyEmailAddress != null && pagerdutyEmailAddress.nonEmpty) {
+          if (failureEmailAddress != "")
+            failureEmailAddress = failureEmailAddress + "," + pagerdutyEmailAddress
+          else
+            failureEmailAddress = pagerdutyEmailAddress
         }
-        else
-          failureEmailAddress = pagerdutyEmailAddress
       }
     }
 
