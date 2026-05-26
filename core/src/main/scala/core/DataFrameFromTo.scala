@@ -587,8 +587,9 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
       vaultPassword = vaultCreds("password")
     }
 
+    val esWritePort = if (port == 9300) 9200 else port
     var esOptions = Map("es.nodes" -> clusterNodes,
-      "es.port" -> port.toString,
+      "es.port" -> esWritePort.toString,
       "es.clustername" -> clusterName,
       "es.net.http.auth.user" -> vaultLogin,
       "es.net.http.auth.pass" -> vaultPassword,
@@ -630,8 +631,9 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
       vaultPassword = vaultCreds("password")
     }
 
+    val esReadPort = if (port == 9300) 9200 else port
     var esOptions = Map("es.nodes" -> clusterNodes,
-      "es.port" -> port.toString,
+      "es.port" -> esReadPort.toString,
       "es.index.auto.create" -> "true",
       "es.nodes.wan.only" -> "true",
       "es.clustername" -> clusterName,
@@ -1138,7 +1140,10 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
 
     var sparkOptions: Map[String, String] = helper.buildSecureKafkaProperties(keyStorePath = keyStorePath, trustStorePath = trustStorePath, keyStorePassword = keyStorePassword, trustStorePassword = trustStorePassword, keyPassword = keyPassword)
 
-    sparkOptions = sparkOptions ++ Map("kafka.bootstrap.servers" -> kafkaBroker, "topic" -> topic, "includeHeaders" -> (!headerField.isEmpty).toString)
+    // Spark 3.5 KafkaWriter.validateQuery() requires topic as a UTF8String Literal, not a plain
+    // String option. Passing "topic" in options causes IllegalArgumentException in Spark 3.5.
+    // Fix: remove "topic" from options and inject it as a literal column in the DataFrame instead.
+    sparkOptions = sparkOptions ++ Map("kafka.bootstrap.servers" -> kafkaBroker, "includeHeaders" -> (!headerField.isEmpty).toString)
 
     if (!addlSparkOptions.isEmpty) {
       sparkOptions = sparkOptions ++ jsonObjectPropertiesToMap(addlSparkOptions.get)
@@ -1161,6 +1166,8 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
     if (!headerField.isEmpty) {
       columnsToSelect = columnsToSelect ++ Seq(df.col(headerField.get) as 'header)
     }
+    // Add topic as a literal column so Spark 3.5 KafkaWriter resolves it as UTF8String
+    columnsToSelect = columnsToSelect ++ Seq(org.apache.spark.sql.functions.lit(topic) as 'topic)
 
     dfavro = df.select(columnsToSelect: _*)
     dfavro.printSchema()

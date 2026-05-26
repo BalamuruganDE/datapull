@@ -130,6 +130,10 @@ object DataPull extends Serializable {
         .config("spark.sql.hive.metastore.jars", "builtin")
         .config("spark.sql.hive.caseSensitiveInferenceMode", "NEVER_INFER")
         .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
+        .config("spark.sql.catalog.spark_catalog", "org.apache.iceberg.spark.SparkSessionCatalog")
+        .config("spark.sql.catalog.spark_catalog.type", "hive")
+        .config("spark.sql.catalog.iceberg", "org.apache.iceberg.spark.SparkCatalog")
+        .config("spark.sql.catalog.iceberg.type", "hive")
         .enableHiveSupport()
         .getOrCreate()
 
@@ -454,6 +458,7 @@ def uuidToBinary(uuid_key: String): Array[Byte] = {
     returnMap
   }
 
+//
 //  def stringToParallaxHash(stringData: String): String = {
 //    if (stringData == null) null
 //    else {

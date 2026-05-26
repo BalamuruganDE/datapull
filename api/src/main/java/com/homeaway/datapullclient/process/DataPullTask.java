@@ -313,6 +313,13 @@ public class DataPullTask implements Runnable {
         // Spark 3.x changed storeAssignmentPolicy default from LEGACY to ANSI: implicit type casts
         // on Hive writes (e.g. INT -> BIGINT) that worked in Spark 2.x now throw AnalysisException.
         sparkDefaultsProperties.put("spark.sql.storeAssignmentPolicy", "LEGACY");
+        // Spark 3.x savemode=overwrite with partitionBy defaults to STATIC (replaces entire table).
+        // DYNAMIC restores Spark 2.x behaviour: only partitions present in the DataFrame are replaced.
+        sparkDefaultsProperties.put("spark.sql.sources.partitionOverwriteMode", "DYNAMIC");
+        // Spark 3.x switched default ORC writer from Hive ORC to Native ORC. Hive/Presto consumers
+        // expect Hive-compatible ORC files; native ORC may cause schema mismatch on reads.
+        sparkDefaultsProperties.put("spark.sql.orc.impl", "hive");
+        sparkDefaultsProperties.put("spark.sql.orc.enableVectorizedReader", "false");
         sparkDefaultsProperties.putAll(this.clusterProperties.getSparkDefaultsProperties());
         Map<String, String> sparkEnvProperties = this.clusterProperties.getSparkEnvProperties();
         Map<String, String> sparkMetricsProperties = this.clusterProperties.getSparkMetricsProperties();
