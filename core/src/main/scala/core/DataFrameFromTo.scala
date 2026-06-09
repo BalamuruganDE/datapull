@@ -119,10 +119,16 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
     }
 
     if (isSFTP) {
-      createOrReplaceTempViewOnDF(sparkSession.read
-        .format("com.springml.spark.sftp")
-        .options(sparkOptions)
-        .load(filePath))
+      val localTmpDir = System.getProperty("java.io.tmpdir") + "/datapull-sftp-" + UUID.randomUUID()
+      new java.io.File(localTmpDir).mkdirs()
+      val port = sparkOptions.getOrElse("port", "22").toInt
+      // SFTPClient(identity, passPhrase, username, password, host, port, runCrypto, secretKey)
+      val sftpClient = if (pemFilePath != "")
+        new com.springml.sftp.client.SFTPClient(pemFilePath, null, vaultLogin, null, host, port, false, null)
+      else
+        new com.springml.sftp.client.SFTPClient(null, null, vaultLogin, vaultPassword, host, port, false, null)
+      val localFile = sftpClient.copy(filePath, localTmpDir)
+      createOrReplaceTempViewOnDF(sparkSession.read.options(sparkOptions - "host" - "username" - "password" - "pem" - "fileType" - "port").format(fileFormat).load(localFile))
     }
     else {
       if (isStream) {
@@ -273,20 +279,18 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
     var sparkOptions: Map[String, String] = Map.empty[String, String]
 
     if (isSFTP) {
-      sparkOptions = sparkOptions ++ Map(
-        "host" -> host,
-        "username" -> login,
-        (if (pemFilePath == "") "password" else "pem") -> (if (pemFilePath == "") password else pemFilePath),
-        "fileType" -> fileFormat
-      )
-      if (!addlSparkOptions.isEmpty) {
-        sparkOptions = sparkOptions ++ jsonObjectPropertiesToMap(addlSparkOptions.get)
-      }
-      df.write.
-        format("com.springml.spark.sftp").
-        options(sparkOptions).
-        option("path", filePath).
-        save()
+      val writeOptions = if (!addlSparkOptions.isEmpty) jsonObjectPropertiesToMap(addlSparkOptions.get) else Map.empty[String, String]
+      val port = writeOptions.getOrElse("port", "22").toInt
+      val localTmpDir = System.getProperty("java.io.tmpdir") + "/datapull-sftp-" + UUID.randomUUID()
+      new java.io.File(localTmpDir).mkdirs()
+      val localOutPath = localTmpDir + "/" + new java.io.File(filePath).getName
+      df.write.format(fileFormat).options(writeOptions - "port").save(localOutPath)
+      // SFTPClient(identity, passPhrase, username, password, host, port, runCrypto, secretKey)
+      val sftpClient = if (pemFilePath != "")
+        new com.springml.sftp.client.SFTPClient(pemFilePath, null, login, null, host, port, false, null)
+      else
+        new com.springml.sftp.client.SFTPClient(null, null, login, password, host, port, false, null)
+      sftpClient.copyToFTP(localOutPath, filePath)
 
     } else if (rowFromJsonString) {
 
@@ -1289,9 +1293,9 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
     println("Properties Passed:" + properties)
 
     val defaultConfigs = Map(
-      "spark.sql.hive.caseSensitiveInferenceMode" -> "NEVER_INFER",
-      //"spark.sql.hive.metastore.version" -> "1.2.1",
-      "spark.sql.hive.metastore.jars" -> "builtin"
+      "spark.sql.hive.caseSensitiveInferenceMode" -> "NEVER_INFER"
+      // spark.sql.hive.metastore.jars is a static config in Spark 3.5 — cannot be set post-session.
+      // It is already set to "builtin" during SparkSession.builder in DataPull.scala.
     )
     val parsedProperties = properties.map { jsonObj =>
       import scala.collection.JavaConverters._
@@ -1338,61 +1342,65 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
     }
   }
 
-  def rdbmsRunCommand(platform: String, url:String, awsEnv: String, server: String, port: String, sslEnabled: Boolean, database: String, sql_command: String, login: String, password: String, vaultEnv: String, secretStore: String, isWindowsAuthenticated: Boolean, domainName: String, typeForTeradata: Option[String], colType: Option[String]): ResultSet = {
+  def rdbmsRunCommand(platform: String, url:String, awsEnv: String, server: String, port: String, sslEnabled: Boolean, database: String, sql_command: String, login: String, password: String, vaultEnv: String, secretStore: String, isWindowsAuthenticated: Boolean, domainName: String, typeForTeradata: Option[String], colType: Option[String]): Option[String] = {
 
-    var resultSet:ResultSet = null
-    if (sql_command != "") {
+    if (sql_command == "") return None
 
-      val configMap = helper.buildRdbmsURI(platform, server, port, database, isWindowsAuthenticated, domainName, typeForTeradata, sslEnabled, null)
-      val driver: String = configMap("driver")
-      val db_url: String = Option(url).filter(_.nonEmpty).getOrElse(configMap("url"))
+    val configMap = helper.buildRdbmsURI(platform, server, port, database, isWindowsAuthenticated, domainName, typeForTeradata, sslEnabled, null)
+    val driver: String = configMap("driver")
+    val db_url: String = Option(url).filter(_.nonEmpty).getOrElse(configMap.getOrElse("url", ""))
 
-      val consul = new Consul(server, appConfig)
-      var clusterName = server
-      if (consul.IsConsulDNSName()) {
-        clusterName = consul.serviceName
-      }
-      //if password isn't set, attempt to get from Vault
-      var vaultPassword = password
-      var vaultLogin = login
-      if (vaultPassword == "") {
-        val secretService = new SecretService(secretStore, appConfig)
-        val vaultCreds = secretService.getSecret(awsEnv, clusterName, login, vaultEnv)
-        vaultLogin = vaultCreds("username")
-        vaultPassword = vaultCreds("password")
-      }
-      //logic
-      var connection: Connection = null
-
-      try {
-        // make the connection
-        Class.forName(driver)
-        connection = DriverManager.getConnection(db_url, vaultLogin, vaultPassword)
-
-        // create the statement, and run the command
-        val statement = connection.createStatement()
-
-        if (colType.isDefined) {
-          resultSet=  statement.executeQuery(sql_command)
-
-        }
-        else {
-          statement.execute(sql_command)
-          null
-        }
-
-      } catch {
-        case e: Throwable => e.printStackTrace
-          throw (e)
-      } finally {
-        if (connection != null) {
-          if (!connection.isClosed()) {
-            connection.close()
-          }
-        }
-      }
+    val consul = new Consul(server, appConfig)
+    var clusterName = server
+    if (consul.IsConsulDNSName()) {
+      clusterName = consul.serviceName
     }
-    resultSet
+    //if password isn't set, attempt to get from Vault
+    var vaultPassword = password
+    var vaultLogin = login
+    if (vaultPassword == "") {
+      val secretService = new SecretService(secretStore, appConfig)
+      val vaultCreds = secretService.getSecret(awsEnv, clusterName, login, vaultEnv)
+      vaultLogin = vaultCreds("username")
+      vaultPassword = vaultCreds("password")
+    }
+    //logic
+    var connection: Connection = null
+
+    try {
+      Class.forName(driver)
+      connection = DriverManager.getConnection(db_url, vaultLogin, vaultPassword)
+      val statement = connection.createStatement()
+
+      if (colType.isDefined) {
+        val rs = statement.executeQuery(sql_command)
+        try {
+          if (rs.next()) {
+            Some(colType.toString match {
+              case "Some(int)"    => String.valueOf(rs.getInt(1))
+              case "Some(string)" => rs.getString(1)
+              case "Some(float)"  => String.valueOf(rs.getFloat(1))
+              case "Some(date)"   => String.valueOf(rs.getDate(1))
+              case "Some(long)"   => String.valueOf(rs.getLong(1))
+              case _              => String.valueOf(rs.getInt(1))
+            })
+          } else None
+        } finally {
+          rs.close()
+          statement.close()
+        }
+      } else {
+        statement.execute(sql_command)
+        statement.close()
+        None
+      }
+
+    } catch {
+      case e: Throwable => e.printStackTrace; throw e
+    } finally {
+      if (connection != null && !connection.isClosed())
+        connection.close()
+    }
   }
 
   def dataFrameToCloudWatch(groupName: String, streamName: String, region: String, accessKey: String, secretKey: String, timeStampColumn: String, timestampFormat: String, df: org.apache.spark.sql.DataFrame, sparkSession: SparkSession): Unit = {

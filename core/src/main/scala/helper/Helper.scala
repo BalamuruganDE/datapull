@@ -301,7 +301,7 @@ class Helper(appConfig: AppConfig) {
       else {
         driver = "com.microsoft.sqlserver.jdbc.SQLServerDriver"
         url = "jdbc:sqlserver://" + server + ":" + (if (port == null) "1433" else port) + ";database=" + database +
-          ";encrypt=" + sslEnabled + ";trustServerCertificate=true"
+          ";encrypt=true;trustServerCertificate=true"
       }
     }
     else if (platform == "oracle") {
@@ -402,7 +402,7 @@ class Helper(appConfig: AppConfig) {
       val propertiesMap = jsonObjectPropertiesToMap(jsonObject = platformObject ) ++ jsonObjectPropertiesToMap(optionalJsonPropertiesList, platformObject)
       val dataframeFromTo = new DataFrameFromTo(appConfig, "test")
       val colType=  jsonObjectPropertiesToMap(inlineexprforjdbcasJson).get("coltype")
-      val rs=  dataframeFromTo.rdbmsRunCommand(
+      dataframeFromTo.rdbmsRunCommand(
         platform = platformObject.getString("platform"),
         url = propertiesMap.getOrElse("url", ""),
         awsEnv = propertiesMap("awsenv"),
@@ -419,24 +419,7 @@ class Helper(appConfig: AppConfig) {
         domainName = propertiesMap.getOrElse("domain", null),
         typeForTeradata = propertiesMap.get("typeforteradata"),
         colType = colType
-      )
-      var returnString: String= null
-      while (rs.next()) {
-        if (colType.toString.equals("Some(int)")) {
-          returnString=  String.valueOf(rs.getInt(1))
-        } else if (colType.toString.equals("Some(string)")) {
-          returnString= rs.getString(1)
-        } else if (colType.toString.equals("Some(float)")) {
-          returnString= String.valueOf(rs.getFloat(1))
-        } else if (colType.toString.equals("Some(date)")) {
-          returnString= String.valueOf(rs.getDate(1))
-        } else if (colType.toString.equals("Some(long)")) {
-          returnString= String.valueOf(rs.getLong(1))
-        } else {
-          returnString= String.valueOf(rs.getInt(1))
-        }
-      }
-      returnString
+      ).orNull
     })
     new JSONObject(returnVal)
   }

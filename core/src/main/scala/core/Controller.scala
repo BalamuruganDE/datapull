@@ -209,6 +209,7 @@ class Controller(appConfig: AppConfig, pipeline: String) {
 
           if (appConfig.smtpTlsEnable == "true") {
             properties.put("mail.smtp.starttls.enable", "true")
+            properties.put("mail.smtp.ssl.trust", appConfig.smtpServerAddress)
           }
 
           if (appConfig.smtpPort != "") {
