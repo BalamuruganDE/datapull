@@ -625,7 +625,7 @@ class Migration extends SparkListener {
 
       dataframeFromTo.hiveToDataFrame(sparkSession = sparkSession, query = propertiesMap("query"), properties = properties)
     } else if (platform == "mongodb") {
-      dataframeFromTo.mongodbToDataFrame(propertiesMap("awsenv"), propertiesMap("cluster"), propertiesMap.getOrElse("overrideconnector", "false"), propertiesMap("database"), propertiesMap("authenticationdatabase"), propertiesMap("collection"), propertiesMap("login"), propertiesMap("password"), sparkSession, propertiesMap("vaultenv"), platformObject.optJSONObject("sparkoptions"), propertiesMap.getOrElse("secretstore", secretStoreDefaultValue), propertiesMap.getOrElse("authenticationenabled", "true"), propertiesMap.getOrElse("tmpfilelocation", null), propertiesMap.getOrElse("samplesize", null), propertiesMap.getOrElse("sslenabled", "false"))
+      dataframeFromTo.mongodbToDataFrame(propertiesMap("awsenv"), propertiesMap("cluster"), propertiesMap.getOrElse("overrideconnector", "false"), propertiesMap("database"), propertiesMap("authenticationdatabase"), propertiesMap("collection"), propertiesMap("login"), propertiesMap("password"), sparkSession, propertiesMap("vaultenv"), platformObject.optJSONObject("sparkoptions"), propertiesMap.getOrElse("secretstore", secretStoreDefaultValue), propertiesMap.getOrElse("authenticationenabled", "true"), propertiesMap.getOrElse("tmpfilelocation", null), propertiesMap.getOrElse("samplesize", null), propertiesMap.getOrElse("sslenabled", "false"), propertiesMap.getOrElse("replicaset", null), propertiesMap.getOrElse("readpreference", null))
     }
     else if (platform == "kafka") {
       dataframeFromTo.kafkaToDataFrame(
@@ -775,6 +775,7 @@ class Migration extends SparkListener {
         tmpJsonObject.put("query", platformObject.get("post_migrate_command"))
         post_migrate_commands.put(tmpJsonObject)
       }
+
 
     }
 

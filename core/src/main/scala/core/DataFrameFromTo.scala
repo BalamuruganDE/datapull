@@ -814,7 +814,7 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
     }
   }
 
-  def mongodbToDataFrame(awsEnv: String, cluster: String, overrideconnector: String, database: String, authenticationDatabase: String, collection: String, login: String, password: String, sparkSession: org.apache.spark.sql.SparkSession, vaultEnv: String, addlSparkOptions: JSONObject, secretStore: String, authenticationEnabled: String, tmpFileLocation: String, sampleSize: String, sslEnabled: String): org.apache.spark.sql.DataFrame = {
+  def mongodbToDataFrame(awsEnv: String, cluster: String, overrideconnector: String, database: String, authenticationDatabase: String, collection: String, login: String, password: String, sparkSession: org.apache.spark.sql.SparkSession, vaultEnv: String, addlSparkOptions: JSONObject, secretStore: String, authenticationEnabled: String, tmpFileLocation: String, sampleSize: String, sslEnabled: String, replicaset: String = null, readPreference: String = null): org.apache.spark.sql.DataFrame = {
     val consul = new Consul(cluster, appConfig)
     var clusterName = cluster
     var clusterNodes = cluster
@@ -837,7 +837,13 @@ class DataFrameFromTo(appConfig: AppConfig, pipeline: String) extends Serializab
         vaultPassword = vaultCreds("password")
       }
     }
-    uri = helper.buildMongoURI(vaultLogin, vaultPassword, cluster, null, authenticationDatabase, database, collection, authenticationEnabled.toBoolean, sslEnabled)
+    // Backward-compat guard: replica-set topology mode is only needed when readPreference routing is
+    // requested. Several existing pipelines carry a `replicaset` value that is a cluster/Consul name,
+    // NOT a real replica-set name; honoring it unconditionally would force replica-set mode and break
+    // their connection (setName mismatch). So only pass replicaSet into the URI when readPreference is
+    // explicitly set. With no readpreference, behavior is identical to before (single-host mode).
+    val effectiveReplicaSet = if (readPreference != null && !readPreference.isEmpty) replicaset else null
+    uri = helper.buildMongoURI(vaultLogin, vaultPassword, cluster, effectiveReplicaSet, authenticationDatabase, database, collection, authenticationEnabled.toBoolean, sslEnabled, readPreference)
     if (overrideconnector.toBoolean) {
       // MongoDB Read using MongoDB Spark Connector
       val readConfig = Map(
