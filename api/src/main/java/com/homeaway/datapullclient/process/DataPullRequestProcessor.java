@@ -550,7 +550,15 @@ public class DataPullRequestProcessor implements DataPullClientService {
             + " && sudo bash -c 'echo \"jdk.security.allowNonCaAnchor=true\" >> /usr/lib/jvm/jre-17/conf/security/java.security'"
             + " && sudo bash -c 'echo \"export JAVA_TOOL_OPTIONS=-Djdk.tls.client.protocols=TLSv1.2 -Djdk.security.allowNonCaAnchor=true\" >> /etc/spark/conf/spark-env.sh'"
             + " && mkdir -p /mnt/bootstrapfiles"
-            + " && echo | openssl s_client -connect " + cassandraHost + ":9042 -tls1_2 2>/dev/null | openssl x509 > /tmp/scylla-server.pem"
+            // Bound the connect so an unreachable host fails fast instead of hanging the bootstrap.
+            // (No pipefail: openssl s_client can exit non-zero even on a successful handshake when the
+            // peer closes the connection, which would false-fail a working host. A connect failure is
+            // still caught because openssl x509 then gets empty input and exits non-zero, and the
+            // test -s check below verifies a non-empty cert was actually written.)
+            // openssl stderr goes to a log file (visible in EMR bootstrap logs) instead of being discarded.
+            + " && timeout 45 bash -c 'echo | openssl s_client -connect " + cassandraHost + ":9042 -tls1_2 2>/tmp/scylla-openssl.err | openssl x509 > /tmp/scylla-server.pem'"
+            // Fail clearly if no (non-empty) cert was written before attempting the keytool import.
+            + " && test -s /tmp/scylla-server.pem"
             + " && keytool -importcert -noprompt -keystore " + jksPath
             + " -storetype JKS -storepass " + jksPassword
             + " -alias scylla-server -file /tmp/scylla-server.pem"
