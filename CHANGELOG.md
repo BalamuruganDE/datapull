@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html)
 
 
-## [0.1.91] - 2026-05-19
+## [0.1.91] - 2026-06-22
 Upgrade DataPull core to Spark 3.5.0, Scala 2.12, Java 11
 
 Dependency upgrades (core/pom.xml):
@@ -76,6 +76,35 @@ MongoDB modernization (DataFrameFromTo.scala):
   inference behaviour changed in mongo-spark-connector 10.x (Spark 3.x returns empty
   StructType for complex fields without sampling)
 
+MongoDB read preference / replica-set support (Helper.scala, DataFrameFromTo.scala, Migration.scala):
+- buildMongoURI(): added optional readPreference param, appended to the URI when set
+- mongodbToDataFrame(): now passes replicaset + readPreference on the read path (was hardcoded
+  null). Guarded so replicaSet is only injected when readPreference is set — existing pipelines
+  that carry a non-RS-name `replicaset` value keep prior single-host behaviour (backward-compatible)
+- Migration: reads top-level `replicaset`/`readpreference` source fields and passes them through
+- Enables routing MongoDB/DocumentDB reads to secondaries via replica-set topology mode
+
+JDBC ResultSet lifecycle fix (DataFrameFromTo.scala, Helper.scala):
+- rdbmsRunCommand() return type changed from ResultSet to Option[String]; the scalar value is read
+  inside the method before the connection closes, with rs -> statement -> connection close ordering.
+  Fixes "Operation not allowed after ResultSet closed" with mysql-connector 8.x on EMR 7
+- ReplaceInlineExpressions (inlineexprforjdbc) caller uses .orNull
+
+SMTP / email fixes (Controller.scala):
+- migrate() now receives SparkSession (was sparkContext.isLocal)
+- Added mail.smtp.ssl.trust when smtpTlsEnable=true (Java 17 cacerts do not trust the corporate
+  SMTP cert -> PKIX failure)
+- Recipient sanitizer: normalizes ';' -> ',' and strips duplicate/trailing commas
+
+SFTP reimplementation (core/pom.xml, DataFrameFromTo.scala):
+- Replaced spark-sftp_2.11 (Scala 2.11 -> NoSuchMethodError on EMR 7 / Scala 2.12) with sftp.client
+  1.0.3 (pure Java); fileToDataFrame/dataFrameToFile copy via com.springml.sftp.client.SFTPClient
+
+Cassandra SSL bootstrap hardening (DataPullRequestProcessor.java):
+- injectCassandraSSLConfig() cert fetch: added timeout on openssl s_client (fail fast instead of
+  hanging on an unreachable host), redirected openssl stderr to a logfile (visible in EMR bootstrap
+  logs), and test -s validation before the keytool import
+
 Empty schema guard (DataFrameFromTo.scala):
 - Added hasEmptyOrNestedEmptySchema() helper
 - dataFrameToFile() now skips write and logs a warning when DataFrame has empty or
@@ -124,6 +153,7 @@ core/src/main/scala/core/DataPull.scala
 core/src/main/scala/core/Migration.scala
 core/src/main/scala/core/Controller.scala
 core/src/main/scala/helper/Helper.scala
+core/src/main/scala/helper/IcebergUtils.scala
 core/src/main/resources/Samples/Input_Json_Specification.json
 
 
